@@ -3,24 +3,26 @@
 var canvas = document.createElement("canvas");
 var ctx = canvas.getContext("2d");
 
-var borderColor = "red";
+var BPP = 4; // Bytes per pixel
 
 function resize() {
+    var bitmap, x, y;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    ctx.fillStyle = "black";
-    ctx.strokeStyle = borderColor;
-    borderColor = borderColor === "red" ? "blue" : "red";
-    ctx.lineWidth = 5;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeRect(0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(canvas.width, canvas.height);
-    ctx.moveTo(canvas.width, 0);
-    ctx.lineTo(0, canvas.height);
-    ctx.stroke();
-    ctx.closePath();
+
+    bitmap = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    for (y = 0; y < bitmap.height; y++) {
+        for (x = 0; x < bitmap.width; x++) {
+            bitmap.data[y*bitmap.width*BPP + x*BPP + 0] = canvas.width % 256; // Red
+            bitmap.data[y*bitmap.width*BPP + x*BPP + 1] = canvas.height % 256; // Green
+            bitmap.data[y*bitmap.width*BPP + x*BPP + 2] = 128; // Blue
+            bitmap.data[y*bitmap.width*BPP + x*BPP + 3] = 255; // Alpha (transparency)
+        }
+    }
+
+    ctx.putImageData(bitmap, 0, 0, 0, 0, canvas.width, canvas.height);
+
     console.log("resize");
 }
 

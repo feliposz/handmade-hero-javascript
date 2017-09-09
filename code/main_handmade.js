@@ -94,7 +94,7 @@ function handleKeyboard(controller, pressed, keyCode) {
         case 73: controller.rStickY = pressed ? +1 : 0; break; // L
         case 188: controller.lTriggerValue = pressed ? +1 : 0; break; // .
         case 190: controller.rTriggerValue = pressed ? +1 : 0; break; // ,
-        case 82: controller.lStickThumb = pressed; break; // 
+        case 82: controller.lStickThumb = pressed; break; // R
         case 70: controller.rStickThumb = pressed; break; // F
         case 38: controller.up = pressed; break; // up arrow
         case 40: controller.down = pressed; break; // down arrow
@@ -134,7 +134,7 @@ function Controller() {
     this.yButton = false;
 };
 
-function GameAudio() {
+function GameAudioOutput() {
     this.sampleRate = 48000;
     this.duration = 2;
     this.bufferLength = this.sampleRate * this.duration;
@@ -146,15 +146,64 @@ function GameAudio() {
     var source = ctx.createBufferSource();
     var gain = ctx.createGain();
 
+    /*
+    // Debug Tone
+    var osc = ctx.createOscillator();
+    var panner = ctx.createPanner();
+    osc.frequency.value = 256;
+    osc.type = "triangle";
+    panner.channelCount = 2;
+    panner.positionX.value = -1;
+    osc.connect(panner);
+    panner.connect(gain);
+    osc.start();
+    */
+
     this.left = buffer.getChannelData(0);
     this.right = buffer.getChannelData(1);
+    this.volume = 0;
+    this.tSine = 0;
+    this.waveType = "sine";
 
-    gain.gain.value = 0.1;
+    this.setTone = function (tone) {
+        this.tone = tone;
+        this.wavePeriod = this.sampleRate / tone;
+    };
+
+    this.setTone(256);
+
+    this.getCurrentTime = function () {
+        return ctx.currentTime;
+    };
+
+    gain.gain.value = 0.2;
     source.buffer = buffer;
     source.connect(gain);
     gain.connect(ctx.destination);
     source.loop = true;
     source.start();
+}
+
+function fillSoundBuffer(output) {
+    var t = output.getCurrentTime();
+    var i, sample, PI2 = Math.PI * 2, increment = PI2 / output.wavePeriod;
+    for (i = 0; i < output.bufferLength; i++) {
+        if (output.waveType === "sine") {
+            sample = Math.sin(output.tSine);
+        } else if (output.waveType === "square") {
+            sample = Math.sign(Math.sin(output.tSine));
+        } else if (output.waveType === "triangle") {
+            sample = Math.abs((output.tSine % PI2) - Math.PI) - Math.PI/2;
+        } else if (output.waveType === "saw") {
+            sample = ((output.tSine % PI2) - Math.PI) / Math.PI;
+        }
+        output.left[i] = sample * output.volume;
+        output.right[i] = sample * output.volume;
+        output.tSine += increment;
+    }
+    while (output.tSine > PI2) {
+        output.tSine -= PI2;
+    }
 }
 
 function main() {
@@ -163,7 +212,7 @@ function main() {
 
     var gameController = new Controller();
     var keyController = new Controller();
-    var audio = new GameAudio();
+    var soundOutput = new GameAudioOutput();
     var i, sample;
 
     resizeBuffer(480, 270);
@@ -182,6 +231,7 @@ function main() {
 
     var loop = function () {
         handleGamepad(gameController);
+        fillSoundBuffer(soundOutput);
 
         if (keyController.up) {
             blueOffset += 5;
@@ -197,35 +247,64 @@ function main() {
         }
 
         if (keyController.aButton) {
-            // white noise
-            for (i = 0; i < audio.bufferLength; i++) {
-                sample = Math.random() * 2 - 1;
-                audio.left[i] = sample;
-                audio.right[i] = sample;
-            }
+            soundOutput.setTone(261);
         }
 
         if (keyController.bButton) {
-            // square wave
-            var tone = 256;
-            for (i = 0; i < audio.bufferLength; i++) {
-                sample = Math.floor(i / audio.sampleRate * tone) % 2 ? -1 : 1;
-                audio.left[i] = sample;
-                audio.right[i] = sample;
-            }
+            soundOutput.setTone(293);
+        }
+
+        if (keyController.xButton) {
+            soundOutput.setTone(329);
         }
 
         if (keyController.yButton) {
-            // silence
-            for (i = 0; i < audio.bufferLength; i++) {
-                sample = 0;
-                audio.left[i] = sample;
-                audio.right[i] = sample;
-            }
+            soundOutput.setTone(349);
+        }
+
+        if (keyController.start) {
+            soundOutput.volume = 1;
+        }
+
+        if (keyController.back) {
+            soundOutput.volume = 0;
+        }
+
+        if (keyController.rShoulder) {
+            soundOutput.waveType = "sine";
+        }        
+
+        if (keyController.lShoulder) {
+            soundOutput.waveType = "square";
+        }        
+        
+        if (keyController.lStickThumb) {
+            soundOutput.waveType = "triangle";
+        }
+
+        if (keyController.rStickThumb) {
+            soundOutput.waveType = "saw";
+        }
+
+        if (gameController.lStickX !== 0) {
+            var tone = Math.floor(128 + (1 + gameController.lStickX) / 2 * 256);
+            soundOutput.setTone(tone);
+        }
+
+        if (gameController.lStickY !== 0) {
+            soundOutput.volume = 1 - gameController.lStickY;
         }
 
         greenOffset -= gameController.lStickX * 5;
         blueOffset -= gameController.lStickY * 5;
+
+        // color offsets must be positives!
+        while (greenOffset < 0) {
+            greenOffset += 256;
+        }
+        while (blueOffset < 0) {
+            blueOffset += 256;
+        }
 
         renderGreenBlueGradient(greenOffset, blueOffset);
         displayBuffer();

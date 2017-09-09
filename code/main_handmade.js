@@ -1,61 +1,33 @@
 "use strict";
 
-var screen = document.createElement("canvas");
-var buffer = document.createElement("canvas");
-
-var bitmap;
-var BPP = 4; // Bytes per pixel
-
-function renderGreenBlueGradient(greenOffset, blueOffset) {
-    var x, y, r, g, b, a, rowOffset, columnOffset;
-    for (y = 0; y < bitmap.height; y++) {
-        rowOffset = y * bitmap.width * BPP;
-        for (x = 0; x < bitmap.width; x++) {
-            columnOffset = rowOffset + x * BPP;
-            r = Math.floor(y * 255 / bitmap.height);
-            g = (x + greenOffset) % 256;
-            b = (y + blueOffset) % 256;
-            a = 255;
-            bitmap.data[columnOffset + 0] = r;
-            bitmap.data[columnOffset + 1] = g;
-            bitmap.data[columnOffset + 2] = b;
-            bitmap.data[columnOffset + 3] = a;
-        }
-    }
-}
-
-function displayBuffer() {
-    buffer.getContext("2d").putImageData(bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
-    var ctx = screen.getContext("2d");
+function displayBuffer(screen, buffer) {
+    buffer.canvas.getContext("2d").putImageData(buffer.bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
+    var ctx = screen.canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(buffer, 0, 0);
+    ctx.drawImage(buffer.canvas, 0, 0);
+    ctx.restore();
 }
 
-function resizeBuffer(width, height) {
+function resizeBuffer(buffer, width, height) {
     buffer.width = width;
     buffer.height = height;
-    bitmap = buffer.getContext("2d").getImageData(0, 0, buffer.width, buffer.height);
+    buffer.canvas.width = width;
+    buffer.canvas.height = height;
+    buffer.bitmap = buffer.canvas.getContext("2d").getImageData(0, 0, buffer.width, buffer.height);
 }
 
-function resizeWindow() {
+function resizeScreen(screen, buffer) {
     screen.width = window.innerWidth;
     screen.height = window.innerHeight;
-    screen.getContext("2d").scale(screen.width / buffer.width, screen.height / buffer.height);
+    screen.canvas.width = screen.width;
+    screen.canvas.height = screen.height;
+    screen.canvas.getContext("2d").scale(screen.width / buffer.width, screen.height / buffer.height);
     console.log("resize");
 }
 
-function focus() {
-    console.log("focus");
-}
-
-function blur() {
-    console.log("blur");
-}
-
-var DEADZONE = 0.25;
-
 function handleGamepad(controller) {
     var i, pad, pads = navigator.getGamepads();
+    var DEADZONE = 0.25;
     for (i = 0; i < pads.length; i++) {
         pad = pads[i];
         if (pad && pad.connected) {
@@ -213,20 +185,33 @@ function fillSoundBuffer(output) {
 function main() {
 
     var greenOffset = 0, blueOffset = 0;
+    var gameState;
+
+    var screen = {};
+    var backBuffer = {};
+    screen.canvas = document.createElement("canvas");
+    backBuffer.canvas = document.createElement("canvas");
+    backBuffer.bytesPerPixel = 4;
 
     var gameController = new Controller();
     var keyController = new Controller();
     var soundOutput = new GameAudioOutput();
     var i, sample;
 
-    resizeBuffer(480, 270);
-    resizeWindow();
+    resizeBuffer(backBuffer, 480, 270);
+    resizeScreen(screen, backBuffer);
 
-    document.body.appendChild(screen);
-    window.onresize = resizeWindow;
-    window.onfocus = focus;
-    window.onblur = blur;
+    document.body.appendChild(screen.canvas);
 
+    window.onresize = function () {
+        resizeScreen(screen, backBuffer);
+    };
+    window.onfocus = function () {
+        console.log("focus");
+    };
+    window.onblur = function () {
+        console.log("blur");
+    };
     window.onkeydown = function (evt) {
         handleKeyboard(keyController, true, evt.keyCode);
     };
@@ -315,8 +300,12 @@ function main() {
             blueOffset += 256;
         }
 
-        renderGreenBlueGradient(greenOffset, blueOffset);
-        displayBuffer();
+        gameState = {
+            greenOffset: greenOffset,
+            blueOffset: blueOffset
+        };
+        gameUpdateAndRender(backBuffer, gameState);
+        displayBuffer(screen, backBuffer);
 
         var currentT = performance.now();
         var elapsedT = currentT - lastT;

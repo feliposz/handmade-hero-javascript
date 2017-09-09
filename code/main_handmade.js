@@ -193,7 +193,7 @@ function fillSoundBuffer(output) {
         } else if (output.waveType === "square") {
             sample = Math.sign(Math.sin(output.tSine));
         } else if (output.waveType === "triangle") {
-            sample = Math.abs((output.tSine % PI2) - Math.PI) - Math.PI/2;
+            sample = Math.abs((output.tSine % PI2) - Math.PI) - Math.PI / 2;
         } else if (output.waveType === "saw") {
             sample = ((output.tSine % PI2) - Math.PI) / Math.PI;
         }
@@ -228,6 +228,10 @@ function main() {
     window.onkeyup = function (evt) {
         handleKeyboard(keyController, false, evt.keyCode);
     };
+
+    var lastT = performance.now();
+    var totalT = 0;
+    var frameCount = 0;
 
     var loop = function () {
         handleGamepad(gameController);
@@ -272,12 +276,12 @@ function main() {
 
         if (keyController.rShoulder) {
             soundOutput.waveType = "sine";
-        }        
+        }
 
         if (keyController.lShoulder) {
             soundOutput.waveType = "square";
-        }        
-        
+        }
+
         if (keyController.lStickThumb) {
             soundOutput.waveType = "triangle";
         }
@@ -308,6 +312,21 @@ function main() {
 
         renderGreenBlueGradient(greenOffset, blueOffset);
         displayBuffer();
+
+        var currentT = performance.now();
+        var elapsedT = currentT - lastT;
+        lastT = currentT;
+
+        frameCount++;
+        totalT += elapsedT;
+        if (totalT > 1000) {
+            var avgFramesPerSec = frameCount / totalT * 1000;
+            var avgMsPerFrame = totalT / frameCount;
+            console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
+            frameCount = 0;
+            totalT -= 1000;
+        }
+
         requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

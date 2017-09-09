@@ -134,12 +134,37 @@ function Controller() {
     this.yButton = false;
 };
 
+function GameAudio() {
+    this.sampleRate = 48000;
+    this.duration = 2;
+    this.bufferLength = this.sampleRate * this.duration;
+    this.left = undefined;
+    this.right = undefined;
+
+    var ctx = new AudioContext();
+    var buffer = ctx.createBuffer(2, this.bufferLength, this.sampleRate);
+    var source = ctx.createBufferSource();
+    var gain = ctx.createGain();
+
+    this.left = buffer.getChannelData(0);
+    this.right = buffer.getChannelData(1);
+
+    gain.gain.value = 0.1;
+    source.buffer = buffer;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.loop = true;
+    source.start();
+}
+
 function main() {
 
     var greenOffset = 0, blueOffset = 0;
 
     var gameController = new Controller();
     var keyController = new Controller();
+    var audio = new GameAudio();
+    var i, sample;
 
     resizeBuffer(480, 270);
     resizeWindow();
@@ -169,6 +194,34 @@ function main() {
         }
         if (keyController.right) {
             greenOffset -= 5;
+        }
+
+        if (keyController.aButton) {
+            // white noise
+            for (i = 0; i < audio.bufferLength; i++) {
+                sample = Math.random() * 2 - 1;
+                audio.left[i] = sample;
+                audio.right[i] = sample;
+            }
+        }
+
+        if (keyController.bButton) {
+            // square wave
+            var tone = 256;
+            for (i = 0; i < audio.bufferLength; i++) {
+                sample = Math.floor(i / audio.sampleRate * tone) % 2 ? -1 : 1;
+                audio.left[i] = sample;
+                audio.right[i] = sample;
+            }
+        }
+
+        if (keyController.yButton) {
+            // silence
+            for (i = 0; i < audio.bufferLength; i++) {
+                sample = 0;
+                audio.left[i] = sample;
+                audio.right[i] = sample;
+            }
         }
 
         greenOffset -= gameController.lStickX * 5;

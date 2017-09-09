@@ -137,20 +137,7 @@ function GameAudioOutput() {
 
     this.left = buffer.getChannelData(0);
     this.right = buffer.getChannelData(1);
-    this.volume = 0;
     this.tSine = 0;
-    this.waveType = "sine";
-
-    this.setTone = function (tone) {
-        this.tone = tone;
-        this.wavePeriod = this.sampleRate / tone;
-    };
-
-    this.setTone(256);
-
-    this.getCurrentTime = function () {
-        return ctx.currentTime;
-    };
 
     gain.gain.value = 0.2;
     source.buffer = buffer;
@@ -160,32 +147,13 @@ function GameAudioOutput() {
     source.start();
 }
 
-function fillSoundBuffer(output) {
-    var t = output.getCurrentTime();
-    var i, sample, PI2 = Math.PI * 2, increment = PI2 / output.wavePeriod;
-    for (i = 0; i < output.bufferLength; i++) {
-        if (output.waveType === "sine") {
-            sample = Math.sin(output.tSine);
-        } else if (output.waveType === "square") {
-            sample = Math.sign(Math.sin(output.tSine));
-        } else if (output.waveType === "triangle") {
-            sample = Math.abs((output.tSine % PI2) - Math.PI) - Math.PI / 2;
-        } else if (output.waveType === "saw") {
-            sample = ((output.tSine % PI2) - Math.PI) / Math.PI;
-        }
-        output.left[i] = sample * output.volume;
-        output.right[i] = sample * output.volume;
-        output.tSine += increment;
-    }
-    while (output.tSine > PI2) {
-        output.tSine -= PI2;
-    }
-}
-
 function main() {
 
     var greenOffset = 0, blueOffset = 0;
-    var gameState;
+    var gameState = {};
+    var waveType = "sine";
+    var tone = 256;
+    var volume = 0;
 
     var screen = {};
     var backBuffer = {};
@@ -225,7 +193,6 @@ function main() {
 
     var loop = function () {
         handleGamepad(gameController);
-        fillSoundBuffer(soundOutput);
 
         if (keyController.up) {
             blueOffset += 5;
@@ -241,52 +208,43 @@ function main() {
         }
 
         if (keyController.aButton) {
-            soundOutput.setTone(261);
+            tone = 261;
         }
-
         if (keyController.bButton) {
-            soundOutput.setTone(293);
+            tone = 293;
         }
-
         if (keyController.xButton) {
-            soundOutput.setTone(329);
+            tone = 329;
         }
-
         if (keyController.yButton) {
-            soundOutput.setTone(349);
+            tone = 349;
         }
 
         if (keyController.start) {
-            soundOutput.volume = 1;
+            volume = 1;
         }
-
         if (keyController.back) {
-            soundOutput.volume = 0;
+            volume = 0;
         }
 
         if (keyController.rShoulder) {
-            soundOutput.waveType = "sine";
+            waveType = "sine";
         }
-
         if (keyController.lShoulder) {
-            soundOutput.waveType = "square";
+            waveType = "square";
         }
-
         if (keyController.lStickThumb) {
-            soundOutput.waveType = "triangle";
+            waveType = "triangle";
         }
-
         if (keyController.rStickThumb) {
-            soundOutput.waveType = "saw";
+            waveType = "saw";
         }
 
         if (gameController.lStickX !== 0) {
-            var tone = Math.floor(128 + (1 + gameController.lStickX) / 2 * 256);
-            soundOutput.setTone(tone);
+            tone = Math.floor(128 + (1 + gameController.lStickX) / 2 * 256);
         }
-
         if (gameController.lStickY !== 0) {
-            soundOutput.volume = 1 - gameController.lStickY;
+            volume = 1 - gameController.lStickY;
         }
 
         greenOffset -= gameController.lStickX * 5;
@@ -302,9 +260,12 @@ function main() {
 
         gameState = {
             greenOffset: greenOffset,
-            blueOffset: blueOffset
+            blueOffset: blueOffset,
+            tone: tone,
+            volume: volume,
+            waveType: waveType
         };
-        gameUpdateAndRender(backBuffer, gameState);
+        gameUpdateAndRender(backBuffer, soundOutput, gameState);
         displayBuffer(screen, backBuffer);
 
         var currentT = performance.now();

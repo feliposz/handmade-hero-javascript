@@ -48,6 +48,10 @@ function focus() {
     console.log("focus");
 }
 
+function blur() {
+    console.log("blur");
+}
+
 var DEADZONE = 0.25;
 
 function handleGamepad(controller) {
@@ -221,6 +225,7 @@ function main() {
     document.body.appendChild(screen);
     window.onresize = resizeWindow;
     window.onfocus = focus;
+    window.onblur = blur;
 
     window.onkeydown = function (evt) {
         handleKeyboard(keyController, true, evt.keyCode);
@@ -317,14 +322,17 @@ function main() {
         var elapsedT = currentT - lastT;
         lastT = currentT;
 
-        frameCount++;
-        totalT += elapsedT;
-        if (totalT > 1000) {
-            var avgFramesPerSec = frameCount / totalT * 1000;
-            var avgMsPerFrame = totalT / frameCount;
-            console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
-            frameCount = 0;
-            totalT -= 1000;
+        // Avoid spikes when focusing back on blurred tab
+        if (elapsedT < 1000) {
+            frameCount++;
+            totalT += elapsedT;
+            if (totalT > 1000) {
+                var avgFramesPerSec = frameCount / totalT * 1000;
+                var avgMsPerFrame = totalT / frameCount;
+                console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
+                frameCount = 0;
+                totalT -= 1000;
+            }
         }
 
         requestAnimationFrame(loop);

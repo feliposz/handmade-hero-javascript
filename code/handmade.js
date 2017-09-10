@@ -1,15 +1,19 @@
 "use strict";
 
-var gameState = {
-    waveType: "sine",
-    tone: 256,
-    volume: 1,
-    greenOffset: 0,
-    blueOffset: 0
-};
+function gameUpdateAndRender(memory, backBuffer, soundOutput, input) {
+    if (!memory.isInitialized) {
+        memory.isInitialized = true;
+        memory.gameState = {
+            waveType: "sine",
+            tone: 256,
+            volume: 1,
+            greenOffset: 0,
+            blueOffset: 0
+        }
+    }
 
-function gameUpdateAndRender(backBuffer, soundOutput, input) {
-    var i;
+    var i, gameState = memory.gameState;
+
     for (i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i]) {
             handleController(input.controllers[i], gameState);

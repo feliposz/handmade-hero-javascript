@@ -177,6 +177,9 @@ function main() {
     var screen = {};
     var backBuffer = {};
     var audio = {};
+    var memory = {
+        isInitialized: false
+    }
     screen.canvas = document.createElement("canvas");
     backBuffer.canvas = document.createElement("canvas");
     backBuffer.bytesPerPixel = 4;
@@ -216,7 +219,7 @@ function main() {
 
     var loop = function () {
         platformHandleGamepad(input);
-        gameUpdateAndRender(backBuffer, soundOutput, input);
+        gameUpdateAndRender(memory, backBuffer, soundOutput, input);
         platformFillSoundBuffer(audio, soundOutput);
         displayBuffer(screen, backBuffer);
 

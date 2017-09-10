@@ -1,5 +1,8 @@
 "use strict";
 
+var DEBUG_PERFORMANCE = false;
+var DEBUG_TONE = false;
+
 function displayBuffer(screen, buffer) {
     buffer.canvas.getContext("2d").putImageData(buffer.bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
     var ctx = screen.canvas.getContext("2d");
@@ -25,16 +28,23 @@ function resizeScreen(screen, buffer) {
     console.log("resize");
 }
 
-function handleGamepad(controller) {
+function platformHandleGamepad(input) {
     var i, pad, pads = navigator.getGamepads();
     var DEADZONE = 0.25;
+    var controller;
+    while (input.controllers.length + 1 < pads.length) {
+        input.controllers.push(new Controller);
+    }
     for (i = 0; i < pads.length; i++) {
         pad = pads[i];
         if (pad && pad.connected) {
-            controller.lStickX = Math.abs(pad.axes[0]) > DEADZONE ? pad.axes[0] : 0;
-            controller.lStickY = Math.abs(pad.axes[1]) > DEADZONE ? pad.axes[1] : 0;
-            controller.rStickX = Math.abs(pad.axes[2]) > DEADZONE ? pad.axes[2] : 0;
-            controller.rStickY = Math.abs(pad.axes[3]) > DEADZONE ? pad.axes[3] : 0;
+            controller = input.controllers[i + 1]; // 0 is keyboard
+            controller.isLStickAnalog = Math.abs(pad.axes[0]) > DEADZONE || Math.abs(pad.axes[1]) > DEADZONE;
+            controller.isRStickAnalog = Math.abs(pad.axes[2]) > DEADZONE || Math.abs(pad.axes[3]) > DEADZONE;
+            controller.lStickX = controller.isLStickAnalog ? pad.axes[0] : 0;
+            controller.lStickY = controller.isLStickAnalog ? pad.axes[1] : 0;
+            controller.rStickX = controller.isRStickAnalog ? pad.axes[2] : 0;
+            controller.rStickY = controller.isRStickAnalog ? pad.axes[3] : 0;
             controller.lTriggerValue = pad.buttons[6].value;
             controller.rTriggerValue = pad.buttons[7].value;
             controller.lStickThumb = pad.buttons[10].pressed;
@@ -43,8 +53,8 @@ function handleGamepad(controller) {
             controller.down = pad.buttons[13].pressed;
             controller.left = pad.buttons[14].pressed;
             controller.right = pad.buttons[15].pressed;
-            controller.start = pad.buttons[8].pressed;
-            controller.back = pad.buttons[9].pressed;
+            controller.start = pad.buttons[9].pressed;
+            controller.back = pad.buttons[8].pressed;
             controller.lShoulder = pad.buttons[4].pressed;
             controller.rShoulder = pad.buttons[5].pressed;
             controller.lTriggerButton = pad.buttons[6].pressed;
@@ -57,17 +67,17 @@ function handleGamepad(controller) {
     }
 }
 
-function handleKeyboard(controller, pressed, keyCode) {
+function platformHandleKeyboard(controller, pressed, keyCode) {
     //console.log(pressed, keyCode);
     switch (keyCode) {
-        case 65: controller.lStickX = pressed ? -1 : 0; break; // A
-        case 68: controller.lStickX = pressed ? +1 : 0; break; // D
-        case 83: controller.lStickY = pressed ? -1 : 0; break; // S
-        case 87: controller.lStickY = pressed ? +1 : 0; break; // W
-        case 74: controller.rStickX = pressed ? -1 : 0; break; // I
-        case 76: controller.rStickY = pressed ? -1 : 0; break; // J
-        case 75: controller.rStickX = pressed ? +1 : 0; break; // K
-        case 73: controller.rStickY = pressed ? +1 : 0; break; // L
+        case 87: controller.lStickY = pressed ? -1 : 0; controller.isLStickAnalog = false; break; // W
+        case 65: controller.lStickX = pressed ? -1 : 0; controller.isLStickAnalog = false; break; // A
+        case 83: controller.lStickY = pressed ? +1 : 0; controller.isLStickAnalog = false; break; // S
+        case 68: controller.lStickX = pressed ? +1 : 0; controller.isLStickAnalog = false; break; // D
+        case 73: controller.rStickY = pressed ? -1 : 0; controller.isRStickAnalog = false; break; // I
+        case 74: controller.rStickX = pressed ? -1 : 0; controller.isRStickAnalog = false; break; // J
+        case 75: controller.rStickY = pressed ? +1 : 0; controller.isRStickAnalog = false; break; // K
+        case 76: controller.rStickX = pressed ? +1 : 0; controller.isRStickAnalog = false; break; // L
         case 188: controller.lTriggerValue = pressed ? +1 : 0; break; // .
         case 190: controller.rTriggerValue = pressed ? +1 : 0; break; // ,
         case 82: controller.lStickThumb = pressed; break; // R
@@ -88,6 +98,8 @@ function handleKeyboard(controller, pressed, keyCode) {
 }
 
 function Controller() {
+    this.isLStickAnalog = false;
+    this.isRStickAnalog = false;
     this.lStickX = 0;
     this.lStickY = 0;
     this.rStickX = 0;
@@ -110,61 +122,72 @@ function Controller() {
     this.yButton = false;
 };
 
-function GameAudioOutput() {
+function SoundOutput() {
     this.sampleRate = 48000;
     this.duration = 2;
     this.bufferLength = this.sampleRate * this.duration;
-    this.left = undefined;
-    this.right = undefined;
-
-    var ctx = new AudioContext();
-    var buffer = ctx.createBuffer(2, this.bufferLength, this.sampleRate);
-    var source = ctx.createBufferSource();
-    var gain = ctx.createGain();
-
-    /*
-    // Debug Tone
-    var osc = ctx.createOscillator();
-    var panner = ctx.createPanner();
-    osc.frequency.value = 256;
-    osc.type = "triangle";
-    panner.channelCount = 2;
-    panner.positionX.value = -1;
-    osc.connect(panner);
-    panner.connect(gain);
-    osc.start();
-    */
-
-    this.left = buffer.getChannelData(0);
-    this.right = buffer.getChannelData(1);
     this.tSine = 0;
+    this.left = new Float32Array(this.bufferLength);
+    this.right = new Float32Array(this.bufferLength);
+}
+
+function platformInitAudioOutput(audio, output) {
+    var context = new AudioContext();
+    var buffer = context.createBuffer(2, output.bufferLength, output.sampleRate);
+    var source = context.createBufferSource();
+    var gain = context.createGain();
+
+    if (DEBUG_TONE) {
+        // Debug Tone
+        var osc = context.createOscillator();
+        var panner = context.createPanner();
+        osc.frequency.value = 256;
+        osc.type = "triangle";
+        panner.channelCount = 2;
+        panner.positionX.value = -1;
+        osc.connect(panner);
+        panner.connect(gain);
+        osc.start();
+    }
+
+    buffer.copyFromChannel(output.left, 0);
+    buffer.copyFromChannel(output.right, 1);
+    //output.left = buffer.getChannelData(0);
+    //output.right = buffer.getChannelData(1);
 
     gain.gain.value = 0.2;
     source.buffer = buffer;
     source.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(context.destination);
     source.loop = true;
     source.start();
+
+    audio.buffer = buffer;
 }
+
+function platformFillSoundBuffer(audio, output) {
+    audio.buffer.copyToChannel(output.left, 0);
+    audio.buffer.copyToChannel(output.right, 1);
+}
+
+var input = {};
 
 function main() {
 
-    var greenOffset = 0, blueOffset = 0;
-    var gameState = {};
-    var waveType = "sine";
-    var tone = 256;
-    var volume = 0;
-
     var screen = {};
     var backBuffer = {};
+    var audio = {};
     screen.canvas = document.createElement("canvas");
     backBuffer.canvas = document.createElement("canvas");
     backBuffer.bytesPerPixel = 4;
 
-    var gameController = new Controller();
-    var keyController = new Controller();
-    var soundOutput = new GameAudioOutput();
+    input.controllers = [
+        new Controller() // Controller 0 will always be keyboard
+    ];
+    var soundOutput = new SoundOutput();
     var i, sample;
+
+    platformInitAudioOutput(audio, soundOutput);
 
     resizeBuffer(backBuffer, 480, 270);
     resizeScreen(screen, backBuffer);
@@ -181,10 +204,10 @@ function main() {
         console.log("blur");
     };
     window.onkeydown = function (evt) {
-        handleKeyboard(keyController, true, evt.keyCode);
+        platformHandleKeyboard(input.controllers[0], true, evt.keyCode);
     };
     window.onkeyup = function (evt) {
-        handleKeyboard(keyController, false, evt.keyCode);
+        platformHandleKeyboard(input.controllers[0], false, evt.keyCode);
     };
 
     var lastT = performance.now();
@@ -192,96 +215,27 @@ function main() {
     var frameCount = 0;
 
     var loop = function () {
-        handleGamepad(gameController);
-
-        if (keyController.up) {
-            blueOffset += 5;
-        }
-        if (keyController.down) {
-            blueOffset -= 5;
-        }
-        if (keyController.left) {
-            greenOffset += 5;
-        }
-        if (keyController.right) {
-            greenOffset -= 5;
-        }
-
-        if (keyController.aButton) {
-            tone = 261;
-        }
-        if (keyController.bButton) {
-            tone = 293;
-        }
-        if (keyController.xButton) {
-            tone = 329;
-        }
-        if (keyController.yButton) {
-            tone = 349;
-        }
-
-        if (keyController.start) {
-            volume = 1;
-        }
-        if (keyController.back) {
-            volume = 0;
-        }
-
-        if (keyController.rShoulder) {
-            waveType = "sine";
-        }
-        if (keyController.lShoulder) {
-            waveType = "square";
-        }
-        if (keyController.lStickThumb) {
-            waveType = "triangle";
-        }
-        if (keyController.rStickThumb) {
-            waveType = "saw";
-        }
-
-        if (gameController.lStickX !== 0) {
-            tone = Math.floor(128 + (1 + gameController.lStickX) / 2 * 256);
-        }
-        if (gameController.lStickY !== 0) {
-            volume = 1 - gameController.lStickY;
-        }
-
-        greenOffset -= gameController.lStickX * 5;
-        blueOffset -= gameController.lStickY * 5;
-
-        // color offsets must be positives!
-        while (greenOffset < 0) {
-            greenOffset += 256;
-        }
-        while (blueOffset < 0) {
-            blueOffset += 256;
-        }
-
-        gameState = {
-            greenOffset: greenOffset,
-            blueOffset: blueOffset,
-            tone: tone,
-            volume: volume,
-            waveType: waveType
-        };
-        gameUpdateAndRender(backBuffer, soundOutput, gameState);
+        platformHandleGamepad(input);
+        gameUpdateAndRender(backBuffer, soundOutput, input);
+        platformFillSoundBuffer(audio, soundOutput);
         displayBuffer(screen, backBuffer);
 
         var currentT = performance.now();
         var elapsedT = currentT - lastT;
         lastT = currentT;
 
-        // Avoid spikes when focusing back on blurred tab
-        if (elapsedT < 1000) {
-            frameCount++;
-            totalT += elapsedT;
-            if (totalT > 1000) {
-                var avgFramesPerSec = frameCount / totalT * 1000;
-                var avgMsPerFrame = totalT / frameCount;
-                console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
-                frameCount = 0;
-                totalT -= 1000;
+        if (DEBUG_PERFORMANCE) {
+            // Avoid spikes when focusing back on blurred tab
+            if (elapsedT < 1000) {
+                frameCount++;
+                totalT += elapsedT;
+                if (totalT > 1000) {
+                    var avgFramesPerSec = frameCount / totalT * 1000;
+                    var avgMsPerFrame = totalT / frameCount;
+                    console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
+                    frameCount = 0;
+                    totalT -= 1000;
+                }
             }
         }
 

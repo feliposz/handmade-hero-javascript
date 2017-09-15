@@ -6,7 +6,7 @@ function gameUpdateAndRender(memory, backBuffer, soundOutput, input) {
         memory.gameState = {
             waveType: "sine",
             tone: 256,
-            volume: 1,
+            volume: 0,
             greenOffset: 0,
             blueOffset: 0
         }
@@ -24,36 +24,48 @@ function gameUpdateAndRender(memory, backBuffer, soundOutput, input) {
 }
 
 function handleController(controller, state) {
-    if (controller.aButton) {
+    if (controller.actionDown.endedDown) {
         state.tone = 261;
     }
-    if (controller.bButton) {
+    if (controller.actionRight.endedDown) {
         state.tone = 293;
     }
-    if (controller.xButton) {
+    if (controller.actionLeft.endedDown) {
         state.tone = 329;
     }
-    if (controller.yButton) {
+    if (controller.actionUp.endedDown) {
         state.tone = 349;
     }
+    if (controller.dPadDown.endedDown) {
+        state.tone = 392;
+    }
+    if (controller.dPadRight.endedDown) {
+        state.tone = 440;
+    }
+    if (controller.dPadLeft.endedDown) {
+        state.tone = 494;
+    }
+    if (controller.dPadUp.endedDown) {
+        state.tone = 523;
+    }
 
-    if (controller.start) {
+    if (controller.start.endedDown) {
         state.volume = 1;
     }
-    if (controller.back) {
+    if (controller.back.endedDown) {
         state.volume = 0;
     }
 
-    if (controller.rShoulder) {
+    if (controller.rShoulder.endedDown) {
         state.waveType = "sine";
     }
-    if (controller.lShoulder) {
+    if (controller.lShoulder.endedDown) {
         state.waveType = "square";
     }
-    if (controller.lStickThumb) {
+    if (controller.lStickThumb.endedDown) {
         state.waveType = "triangle";
     }
-    if (controller.rStickThumb) {
+    if (controller.rStickThumb.endedDown) {
         state.waveType = "saw";
     }
 
@@ -61,8 +73,8 @@ function handleController(controller, state) {
         state.tone = Math.floor(128 + (1 + controller.lStickX) / 2 * 256);
     } else {
         state.tone += controller.lStickX * 2;
-        if (state.tone < 128) { state.tone = 128; }
-        if (state.tone > 384) { state.tone = 384; }
+        if (state.tone < 27) { state.tone = 27; }
+        if (state.tone > 4000) { state.tone = 4000; }
     }
     if (controller.isLStickAnalog) {
         state.volume = 1 - controller.lStickY;

@@ -28,76 +28,14 @@ function resizeScreen(screen, buffer) {
     console.log("resize");
 }
 
-function platformHandleGamepad(input) {
-    var i, pad, pads = navigator.getGamepads();
-    var DEADZONE = 0.25;
-    var controller;
-    while (input.controllers.length + 1 < pads.length) {
-        input.controllers.push(new Controller);
-    }
-    for (i = 0; i < pads.length; i++) {
-        pad = pads[i];
-        if (pad && pad.connected) {
-            controller = input.controllers[i + 1]; // 0 is keyboard
-            controller.isLStickAnalog = Math.abs(pad.axes[0]) > DEADZONE || Math.abs(pad.axes[1]) > DEADZONE;
-            controller.isRStickAnalog = Math.abs(pad.axes[2]) > DEADZONE || Math.abs(pad.axes[3]) > DEADZONE;
-            controller.lStickX = controller.isLStickAnalog ? pad.axes[0] : 0;
-            controller.lStickY = controller.isLStickAnalog ? pad.axes[1] : 0;
-            controller.rStickX = controller.isRStickAnalog ? pad.axes[2] : 0;
-            controller.rStickY = controller.isRStickAnalog ? pad.axes[3] : 0;
-            controller.lTriggerValue = pad.buttons[6].value;
-            controller.rTriggerValue = pad.buttons[7].value;
-            controller.lStickThumb = pad.buttons[10].pressed;
-            controller.rStickThumb = pad.buttons[11].pressed;
-            controller.up = pad.buttons[12].pressed;
-            controller.down = pad.buttons[13].pressed;
-            controller.left = pad.buttons[14].pressed;
-            controller.right = pad.buttons[15].pressed;
-            controller.start = pad.buttons[9].pressed;
-            controller.back = pad.buttons[8].pressed;
-            controller.lShoulder = pad.buttons[4].pressed;
-            controller.rShoulder = pad.buttons[5].pressed;
-            controller.lTriggerButton = pad.buttons[6].pressed;
-            controller.rTriggerButton = pad.buttons[7].pressed;
-            controller.aButton = pad.buttons[0].pressed;
-            controller.bButton = pad.buttons[1].pressed;
-            controller.xButton = pad.buttons[2].pressed;
-            controller.yButton = pad.buttons[3].pressed;
-        }
-    }
-}
-
-function platformHandleKeyboard(controller, pressed, keyCode) {
-    //console.log(pressed, keyCode);
-    switch (keyCode) {
-        case 87: controller.lStickY = pressed ? -1 : 0; controller.isLStickAnalog = false; break; // W
-        case 65: controller.lStickX = pressed ? -1 : 0; controller.isLStickAnalog = false; break; // A
-        case 83: controller.lStickY = pressed ? +1 : 0; controller.isLStickAnalog = false; break; // S
-        case 68: controller.lStickX = pressed ? +1 : 0; controller.isLStickAnalog = false; break; // D
-        case 73: controller.rStickY = pressed ? -1 : 0; controller.isRStickAnalog = false; break; // I
-        case 74: controller.rStickX = pressed ? -1 : 0; controller.isRStickAnalog = false; break; // J
-        case 75: controller.rStickY = pressed ? +1 : 0; controller.isRStickAnalog = false; break; // K
-        case 76: controller.rStickX = pressed ? +1 : 0; controller.isRStickAnalog = false; break; // L
-        case 188: controller.lTriggerValue = pressed ? +1 : 0; break; // .
-        case 190: controller.rTriggerValue = pressed ? +1 : 0; break; // ,
-        case 82: controller.lStickThumb = pressed; break; // R
-        case 70: controller.rStickThumb = pressed; break; // F
-        case 38: controller.up = pressed; break; // up arrow
-        case 40: controller.down = pressed; break; // down arrow
-        case 37: controller.left = pressed; break; // left arrow
-        case 39: controller.right = pressed; break; // right arrow
-        case 32: controller.start = pressed; break; // space
-        case 27: controller.back = pressed; break; // escape
-        case 81: controller.lShoulder = pressed; break; // Q
-        case 69: controller.rShoulder = pressed; break; // E
-        case 90: controller.aButton = pressed; break; // Z
-        case 88: controller.bButton = pressed; break; // X
-        case 67: controller.xButton = pressed; break; // C
-        case 86: controller.yButton = pressed; break; // V
-    }
+function GameButtonState() {
+    this.halfTransitionCount = 0;
+    this.startedDown = false;
+    this.endedDown = false;
 }
 
 function Controller() {
+    this.isConnected = false;
     this.isLStickAnalog = false;
     this.isRStickAnalog = false;
     this.lStickX = 0;
@@ -106,21 +44,126 @@ function Controller() {
     this.rStickY = 0;
     this.lTriggerValue = 0;
     this.rTriggerValue = 0;
-    this.lStickThumb = false;
-    this.rStickThumb = false;
-    this.up = false;
-    this.down = false;
-    this.left = false;
-    this.right = false;
-    this.start = false;
-    this.back = false;
-    this.lShoulder = false;
-    this.rShoulder = false;
-    this.aButton = false;
-    this.bButton = false;
-    this.xButton = false;
-    this.yButton = false;
-};
+    this.lTriggerButton = new GameButtonState();
+    this.rTriggerButton = new GameButtonState();
+    this.lStickThumb = new GameButtonState();
+    this.rStickThumb = new GameButtonState();
+    this.dPadUp = new GameButtonState();
+    this.dPadDown = new GameButtonState();
+    this.dPadLeft = new GameButtonState();
+    this.dPadRight = new GameButtonState();
+    this.start = new GameButtonState();
+    this.back = new GameButtonState();
+    this.lShoulder = new GameButtonState();
+    this.rShoulder = new GameButtonState();
+    this.actionUp = new GameButtonState();
+    this.actionDown = new GameButtonState();
+    this.actionLeft = new GameButtonState();
+    this.actionRight = new GameButtonState();
+}
+
+function platformCreateInput(numControllers) {
+    var i;
+    var input = {
+        controllers: []
+    };
+    for (i = 0; i < numControllers; i++) {
+        input.controllers[i] = new Controller();
+        input.controllers[i].isConnected = (i === 0);
+    }
+    return input;
+}
+
+function processDigitalButton(oldButtonState, newButtonState, pressed) {
+    newButtonState.startedDown = oldButtonState.endedDown;
+    newButtonState.endedDown = pressed;
+    if (newButtonState.startedDown !== newButtonState.endedDown) {
+        newButtonState.halfTransitionCount++;
+    } else {
+        newButtonState.halfTransitionCount = 0;
+    }
+}
+
+function platformHandleGamepad(oldInput, newInput) {
+    var i, pad, pads = navigator.getGamepads();
+    var DEADZONE = 0.25;
+    var oldController, newController;
+    for (i = 0; i < pads.length; i++) {
+        pad = pads[i];
+        if (pad) {
+            oldController = oldInput.controllers[pad.index+1];
+            newController = newInput.controllers[pad.index+1];
+            newController.isConnected = pad.connected;
+            if (pad.connected) {
+                newController.isLStickAnalog = Math.abs(pad.axes[0]) > DEADZONE || Math.abs(pad.axes[1]) > DEADZONE;
+                newController.isRStickAnalog = Math.abs(pad.axes[2]) > DEADZONE || Math.abs(pad.axes[3]) > DEADZONE;
+                newController.lStickX = newController.isLStickAnalog ? pad.axes[0] : 0;
+                newController.lStickY = newController.isLStickAnalog ? pad.axes[1] : 0;
+                newController.rStickX = newController.isRStickAnalog ? pad.axes[2] : 0;
+                newController.rStickY = newController.isRStickAnalog ? pad.axes[3] : 0;
+                newController.lTriggerValue = pad.buttons[6].value;
+                newController.rTriggerValue = pad.buttons[7].value;
+                processDigitalButton(oldController.lStickThumb, newController.lStickThumb, pad.buttons[10].pressed);
+                processDigitalButton(oldController.rStickThumb, newController.rStickThumb, pad.buttons[11].pressed);
+                processDigitalButton(oldController.dPadUp, newController.dPadUp, pad.buttons[12].pressed);
+                processDigitalButton(oldController.dPadDown, newController.dPadDown, pad.buttons[13].pressed);
+                processDigitalButton(oldController.dPadLeft, newController.dPadLeft, pad.buttons[14].pressed);
+                processDigitalButton(oldController.dPadRight, newController.dPadRight, pad.buttons[15].pressed);
+                processDigitalButton(oldController.start, newController.start, pad.buttons[9].pressed);
+                processDigitalButton(oldController.back, newController.back, pad.buttons[8].pressed);
+                processDigitalButton(oldController.lShoulder, newController.lShoulder, pad.buttons[4].pressed);
+                processDigitalButton(oldController.rShoulder, newController.rShoulder, pad.buttons[5].pressed);
+                processDigitalButton(oldController.lTriggerButton, newController.lTriggerButton, pad.buttons[6].pressed);
+                processDigitalButton(oldController.rTriggerButton, newController.rTriggerButton, pad.buttons[7].pressed);
+                processDigitalButton(oldController.actionDown, newController.actionDown, pad.buttons[0].pressed);
+                processDigitalButton(oldController.actionRight, newController.actionRight, pad.buttons[1].pressed);
+                processDigitalButton(oldController.actionLeft, newController.actionLeft, pad.buttons[2].pressed);
+                processDigitalButton(oldController.actionUp, newController.actionUp, pad.buttons[3].pressed);
+            }
+        }
+    }
+}
+
+function platformHandleKeyboard(oldInput, newInput, pressed, keyCode) {
+    var oldKb = oldInput.controllers[0];
+    var newKb = newInput.controllers[0];
+    //console.log(pressed, keyCode);
+    switch (keyCode) {
+        case 87: newKb.lStickY = pressed ? -1 : 0; newKb.isLStickAnalog = false; break; // W
+        case 65: newKb.lStickX = pressed ? -1 : 0; newKb.isLStickAnalog = false; break; // A
+        case 83: newKb.lStickY = pressed ? +1 : 0; newKb.isLStickAnalog = false; break; // S
+        case 68: newKb.lStickX = pressed ? +1 : 0; newKb.isLStickAnalog = false; break; // D
+        case 73: newKb.rStickY = pressed ? -1 : 0; newKb.isRStickAnalog = false; break; // I
+        case 74: newKb.rStickX = pressed ? -1 : 0; newKb.isRStickAnalog = false; break; // J
+        case 75: newKb.rStickY = pressed ? +1 : 0; newKb.isRStickAnalog = false; break; // K
+        case 76: newKb.rStickX = pressed ? +1 : 0; newKb.isRStickAnalog = false; break; // L
+        case 188: newKb.lTriggerValue = pressed ? +1 : 0; processDigitalButton(oldKb.lTriggerButton, newKb.lTriggerButton, pressed); break; // .
+        case 190: newKb.rTriggerValue = pressed ? +1 : 0; processDigitalButton(oldKb.rTriggerButton, newKb.rTriggerButton, pressed);break; // ,
+        case 82: processDigitalButton(oldKb.lStickThumb, newKb.lStickThumb, pressed); break; // R
+        case 70: processDigitalButton(oldKb.rStickThumb, newKb.rStickThumb, pressed); break; // F
+        case 38: processDigitalButton(oldKb.dPadUp, newKb.dPadUp, pressed); break; // up arrow
+        case 40: processDigitalButton(oldKb.dPadDown, newKb.dPadDown, pressed); break; // down arrow
+        case 37: processDigitalButton(oldKb.dPadLeft, newKb.dPadLeft, pressed); break; // left arrow
+        case 39: processDigitalButton(oldKb.dPadRight, newKb.dPadRight, pressed); break; // right arrow
+        case 32: processDigitalButton(oldKb.start, newKb.start, pressed); break; // space
+        case 27: processDigitalButton(oldKb.back, newKb.back, pressed); break; // escape
+        case 81: processDigitalButton(oldKb.lShoulder, newKb.lShoulder, pressed); break; // Q
+        case 69: processDigitalButton(oldKb.rShoulder, newKb.rShoulder, pressed); break; // E
+        case 90: processDigitalButton(oldKb.actionDown, newKb.actionDown, pressed); break; // Z
+        case 88: processDigitalButton(oldKb.actionRight, newKb.actionRight, pressed); break; // X
+        case 67: processDigitalButton(oldKb.actionLeft, newKb.actionLeft, pressed); break; // C
+        case 86: processDigitalButton(oldKb.actionUp, newKb.actionUp, pressed); break; // V
+    }
+    // TODO: Find a better way to deal with transition from old to new while simulating analog...
+    oldKb.lStickX = newKb.lStickX;
+    oldKb.lStickY = newKb.lStickY;
+    oldKb.rStickX = newKb.rStickX;
+    oldKb.rStickY = newKb.rStickY;
+    oldKb.lTriggerValue = newKb.lTriggerValue;
+    oldKb.rTriggerValue = newKb.rTriggerValue;
+    oldKb.isLStickAnalog = newKb.isLStickAnalog;
+    oldKb.isRStickAnalog = newKb.isRStickAnalog;    
+}
 
 function SoundOutput() {
     this.sampleRate = 48000;
@@ -184,9 +227,9 @@ function main() {
     backBuffer.canvas = document.createElement("canvas");
     backBuffer.bytesPerPixel = 4;
 
-    input.controllers = [
-        new Controller() // Controller 0 will always be keyboard
-    ];
+    var oldInput = platformCreateInput(5);
+    var newInput = platformCreateInput(5);
+
     var soundOutput = new SoundOutput();
     var i, sample;
 
@@ -207,10 +250,10 @@ function main() {
         console.log("blur");
     };
     window.onkeydown = function (evt) {
-        platformHandleKeyboard(input.controllers[0], true, evt.keyCode);
+        platformHandleKeyboard(oldInput, newInput, true, evt.keyCode);
     };
     window.onkeyup = function (evt) {
-        platformHandleKeyboard(input.controllers[0], false, evt.keyCode);
+        platformHandleKeyboard(oldInput, newInput, false, evt.keyCode);
     };
 
     var lastT = performance.now();
@@ -218,10 +261,14 @@ function main() {
     var frameCount = 0;
 
     var loop = function () {
-        platformHandleGamepad(input);
-        gameUpdateAndRender(memory, backBuffer, soundOutput, input);
+        platformHandleGamepad(oldInput, newInput);
+        gameUpdateAndRender(memory, backBuffer, soundOutput, newInput);
         platformFillSoundBuffer(audio, soundOutput);
         displayBuffer(screen, backBuffer);
+
+        var tmp = newInput;
+        newInput = oldInput;
+        oldInput = tmp;
 
         var currentT = performance.now();
         var elapsedT = currentT - lastT;
@@ -241,7 +288,6 @@ function main() {
                 }
             }
         }
-
         requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

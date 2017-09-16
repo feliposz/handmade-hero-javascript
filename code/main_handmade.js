@@ -16,6 +16,7 @@ function resizeBuffer(buffer, width, height) {
     buffer.height = height;
     buffer.canvas.width = width;
     buffer.canvas.height = height;
+    buffer.pitch = width * buffer.bytesPerPixel;
     buffer.bitmap = buffer.canvas.getContext("2d").getImageData(0, 0, buffer.width, buffer.height);
 }
 
@@ -26,6 +27,23 @@ function resizeScreen(screen, buffer) {
     screen.canvas.height = screen.height;
     screen.canvas.getContext("2d").scale(screen.width / buffer.width, screen.height / buffer.height);
     console.log("resize");
+}
+
+function debugDrawVertical(buffer, x, top, bottom, color) {
+    var y;
+    x = Math.floor(x);
+    top = Math.floor(top);
+    bottom = Math.floor(bottom);
+    //top = top < 0 ? 0 : top > buffer.height ? buffer.height : top;
+    //bottom = bottom < 0 ? 0 : bottom > buffer.height ? buffer.height : bottom;
+    var offset = top * buffer.pitch + x * buffer.bytesPerPixel;
+    for (y = top; y <= bottom; y++) {
+        buffer.bitmap.data[offset + 0] = color.r;
+        buffer.bitmap.data[offset + 1] = color.g;
+        buffer.bitmap.data[offset + 2] = color.b;
+        buffer.bitmap.data[offset + 3] = 255;
+        offset += buffer.pitch;
+    }
 }
 
 function GameButtonState() {
@@ -186,10 +204,11 @@ function platformHandleKeyboardPad(pad, pressed, keyCode) {
 }
 
 function SoundOutput() {
-    this.sampleRate = 48000;
-    this.duration = 2;
+    this.sampleRate = 48000; // samples per second
+    this.duration = 2; // seconds
     this.bufferLength = this.sampleRate * this.duration;
-    this.tSine = 0;
+    this.tSine = 0; // radians
+    this.lastWriteCursor = 0; // index
     this.left = new Float32Array(this.bufferLength);
     this.right = new Float32Array(this.bufferLength);
 }
@@ -225,6 +244,12 @@ function platformInitAudioOutput(audio, output) {
     source.loop = true;
     source.start();
 
+    output.getCurrentTime = function () {
+         return context.currentTime; 
+    };
+    output.getPlayCursor = function () { 
+        return Math.floor(context.currentTime % output.duration / output.duration * output.bufferLength);
+    };
     audio.buffer = buffer;
 }
 
@@ -254,7 +279,9 @@ function main() {
 
     platformInitAudioOutput(audio, soundOutput);
 
-    resizeBuffer(backBuffer, 480, 270);
+    //resizeBuffer(backBuffer, 480, 270);
+    //resizeBuffer(backBuffer, 960, 540);
+    resizeBuffer(backBuffer, 1920, 1080);
     resizeScreen(screen, backBuffer);
 
     document.body.appendChild(screen.canvas);
@@ -278,11 +305,39 @@ function main() {
     var lastT = performance.now();
     var totalT = 0;
     var frameCount = 0;
-
+    var debugMarkers = [];
+    var currentDebugMaker = 0;
+    
     var loop = function () {
         platformHandleInput(keyboardPad, oldInput.controllers[0], newInput.controllers[0]);
         platformHandleGamepads(oldInput, newInput);
         gameUpdateAndRender(memory, backBuffer, soundOutput, newInput);
+        
+        // playcursor markers
+        debugMarkers[currentDebugMaker] = soundOutput.getPlayCursor() / soundOutput.bufferLength * backBuffer.width;
+        for (var i = 0; i < debugMarkers.length; i++) {
+            debugDrawVertical(backBuffer, debugMarkers[i], 10, backBuffer.height/2, i === currentDebugMaker ? {r: 255, g: 255, b: 255} : {r: 255, g: 0, b: 0});
+        }
+        currentDebugMaker = (currentDebugMaker + 1) % 10;
+        
+        // draw sound buffer samples
+        var offset, sample, x;
+        for (x = 0; x < backBuffer.width; x++) {
+            offset = Math.floor(x / backBuffer.width * soundOutput.bufferLength);
+            sample = soundOutput.left[offset] * backBuffer.height*0.05;
+            if (sample < 0) {
+                debugDrawVertical(backBuffer, x, backBuffer.height*.25 + sample, backBuffer.height*.25, {r: 255, g: 255, b: 0});
+            } else if (sample > 0) {
+                debugDrawVertical(backBuffer, x, backBuffer.height*.25, sample + backBuffer.height*.25, {r: 0, g: 255, b: 0});
+            }
+            sample = soundOutput.right[offset] * backBuffer.height*0.05;
+            if (sample < 0) {
+                debugDrawVertical(backBuffer, x, backBuffer.height*.5 + sample, backBuffer.height*.5, {r: 255, g: 0, b: 255});
+            } else if (sample > 0) {
+                debugDrawVertical(backBuffer, x, backBuffer.height*.5, sample + backBuffer.height*.5, {r: 0, g: 0, b: 255});
+            }
+        }
+
         platformFillSoundBuffer(audio, soundOutput);
         displayBuffer(screen, backBuffer);
 

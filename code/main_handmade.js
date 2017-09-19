@@ -3,6 +3,16 @@
 var DEBUG_PERFORMANCE = false;
 var DEBUG_TONE = false;
 
+var functionStub = function () {};
+var gameCode = {};
+gameCode.lastReload = null;
+gameCode.autoReload = false;
+gameCode.autoReloadCountDown = 0;
+gameCode.updateAndRender = functionStub;
+gameCode.handleController = functionStub;
+gameCode.renderGreenBlueGradient = functionStub;
+gameCode.getSoundSamples = functionStub;
+
 function displayBuffer(screen, buffer) {
     buffer.canvas.getContext("2d").putImageData(buffer.bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
     var ctx = screen.canvas.getContext("2d");
@@ -258,7 +268,33 @@ function platformFillSoundBuffer(audio, output) {
     audio.buffer.copyToChannel(output.right, 1);
 }
 
+function loadGameCode(gameCode) {
+    if (gameCode.script) {
+        document.body.removeChild(gameCode.script);
+        gameCode.script = null;
+    }
+    gameCode.script = document.createElement("script");
+    gameCode.script.src = "code/handmade.js";
+    gameCode.script.type = "text/javascript";
+    gameCode.lastReload = new Date();
+    document.body.appendChild(gameCode.script);
+}
+
+function setGameLoadInterval(gameCode, timeInterval) {
+    if (gameCode.timer) {
+        clearInterval(gameCode.timer);
+        gameCode.timer = null;
+    }
+    if (timeInterval > 0) {
+        gameCode.timer = setInterval(function () {
+            loadGameCode(gameCode);
+        }, timeInterval);    
+    }
+}
+
 function main() {
+   
+    loadGameCode(gameCode);
 
     var screen = {};
     var backBuffer = {};
@@ -295,10 +331,27 @@ function main() {
     window.onblur = function () {
         console.log("blur");
     };
+    var holdingKey = {};
     window.onkeydown = function (evt) {
+        // first pressed
+        if (!(evt.keyCode in holdingKey) || !holdingKey[evt.keyCode]) {
+            if (evt.keyCode === 112) {
+                // F1 - Hot reload game code
+                console.log("reloading");
+                loadGameCode(gameCode);
+                evt.preventDefault();
+            } else if (evt.keyCode === 113) {
+                // F2 - Toggle auto-reload
+                gameCode.autoReload = !gameCode.autoReload;
+                console.log("autoReload = " + gameCode.autoReload);
+                evt.preventDefault();
+            }
+        }
+        holdingKey[evt.keyCode] = true;
         platformHandleKeyboardPad(keyboardPad, true, evt.keyCode);
     };
     window.onkeyup = function (evt) {
+        holdingKey[evt.keyCode] = false;
         platformHandleKeyboardPad(keyboardPad, false, evt.keyCode);
     };
 
@@ -311,7 +364,8 @@ function main() {
     var loop = function () {
         platformHandleInput(keyboardPad, oldInput.controllers[0], newInput.controllers[0]);
         platformHandleGamepads(oldInput, newInput);
-        gameUpdateAndRender(memory, backBuffer, soundOutput, newInput);
+        gameCode.updateAndRender(memory, backBuffer, newInput);
+        gameCode.getSoundSamples(memory, soundOutput);
         
         // playcursor markers
         debugMarkers[currentDebugMaker] = soundOutput.getPlayCursor() / soundOutput.bufferLength * backBuffer.width;
@@ -363,6 +417,16 @@ function main() {
                 }
             }
         }
+
+        if (gameCode.autoReload) {
+            if (gameCode.autoReloadCountDown <= 0) {
+                loadGameCode(gameCode);
+                gameCode.autoReloadCountDown = 30;
+            } else {
+                gameCode.autoReloadCountDown--;
+            }
+        }
+
         requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);

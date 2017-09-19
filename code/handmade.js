@@ -1,6 +1,6 @@
 "use strict";
 
-function gameUpdateAndRender(memory, backBuffer, soundOutput, input) {
+gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
         memory.gameState = {
@@ -17,14 +17,13 @@ function gameUpdateAndRender(memory, backBuffer, soundOutput, input) {
 
     for (i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i]) {
-            handleController(input.controllers[i], gameState);
+            gameCode.handleController(input.controllers[i], gameState);
         }
     }
-    gameOutputSound(soundOutput, gameState.tone, gameState.volume, gameState.waveType);
-    renderGreenBlueGradient(backBuffer, gameState.greenOffset, gameState.blueOffset);
-}
+    gameCode.renderGreenBlueGradient(backBuffer, gameState.greenOffset, gameState.blueOffset);
+};
 
-function handleController(controller, state) {
+gameCode.handleController = function (controller, state) {
     if (state.hold > 0 && state.volume > 0) {
         state.volume -= 0.01;
         state.hold--;
@@ -117,9 +116,9 @@ function handleController(controller, state) {
     while (state.blueOffset < 0) {
         state.blueOffset += 256;
     }
-}
+};
 
-function renderGreenBlueGradient(buffer, greenOffset, blueOffset) {
+gameCode.renderGreenBlueGradient = function (buffer, greenOffset, blueOffset) {
     var x, y, r, g, b, a, rowOffset, columnOffset;
     for (y = 0; y < buffer.height; y++) {
         rowOffset = y * buffer.width * buffer.bytesPerPixel;
@@ -135,9 +134,10 @@ function renderGreenBlueGradient(buffer, greenOffset, blueOffset) {
             buffer.bitmap.data[columnOffset + 3] = a;
         }
     }
-}
+};
 
-function gameOutputSound(output, tone, volume, waveType) {
+gameCode.getSoundSamples = function (memory, output) {
+    var tone = memory.gameState.tone, volume = memory.gameState.volume, waveType = memory.gameState.waveType;
     var wavePeriod = output.sampleRate / tone;
 
     var i, offset, sample, PI2 = Math.PI * 2, increment = PI2 / wavePeriod;
@@ -149,7 +149,7 @@ function gameOutputSound(output, tone, volume, waveType) {
 
     var playCursor = output.getPlayCursor();
     var latency = 1;
-    var endWriteCursor = playCursor + frameLength*(latency+framesToWrite);
+    var endWriteCursor = playCursor + frameLength * (latency + framesToWrite);
     var writeCount = 0;
     var startWriteCursor = 0;
     if (output.lastWriteCursor < endWriteCursor) {
@@ -164,7 +164,7 @@ function gameOutputSound(output, tone, volume, waveType) {
     }
     //console.log(`Play: ${playCursor}, Last: ${output.lastWriteCursor}, Start: ${startWriteCursor}, End: ${endWriteCursor}, Count: ${writeCount}`);
     output.lastWriteCursor = endWriteCursor;
-    
+
     for (i = 0; i < writeCount; i++) {
         if (waveType === "sine") {
             sample = Math.sin(output.tSine);
@@ -189,4 +189,4 @@ function gameOutputSound(output, tone, volume, waveType) {
         output.tSine -= PI2;
     }
 
-}
+};

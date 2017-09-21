@@ -15,7 +15,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
 
     for (i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i].isConnected) {
-            gameCode.handleController(input.controllers[i], gameState);
+            gameCode.handleController(input.controllers[i], gameState, input.dtForFrame);
         }
     }
     
@@ -33,8 +33,42 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
     
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
-    var jump = 200 * Math.sin(gameState.tJump / 100.0 * Math.PI);
-    drawRectangle(backBuffer, gameState.playerX, gameState.playerY-jump, gameState.playerX+10, gameState.playerY+10-jump, 1, 1, 0);
+
+    var tileWidth = 60;
+    var tileHeight = 60;
+    var tileMap = [
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ]
+    ];
+
+    for (var row = 0; row < tileMap.length; row++) {
+        for (var col = 0; col < tileMap[row].length; col++) {
+            var minX = (col-0.5) * tileWidth, minY = row * tileHeight, maxX = (col+0.5) * tileWidth, maxY = (row+1) * tileHeight;
+            var tileId = tileMap[row][col];
+            var gray = 0.5;
+            if (tileId == 1) {
+                gray = 1;
+            }
+            drawRectangle(backBuffer, minX, minY, maxX, maxY, gray, gray, gray);
+        }
+    }
+
+    var jump = 70 * Math.sin(gameState.tJump / 100.0 * Math.PI);
+    var playerWidth = 50;
+    var playerHeight = 70;
+    var playerLeft = gameState.playerX - 0.5 * playerWidth;
+    var playerTop = gameState.playerY - jump - 0.5 * playerHeight;
+    var playerR = 1;
+    var playerG = 1;
+    var playerB = 0;
+    drawRectangle(backBuffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);   
 
     if (DEBUG_MOUSE) {
         drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX+10, input.mouseY+10, 1, 1, 0);
@@ -48,7 +82,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
 };
 
-gameCode.handleController = function (controller, state) {
+gameCode.handleController = function (controller, state, dt) {
     if (controller.actionDown.endedDown) {
         if (state.tJump === 0 && !controller.actionDown.startedDown) {
             state.playerY += 50;
@@ -56,12 +90,12 @@ gameCode.handleController = function (controller, state) {
     }
     if (controller.actionRight.endedDown) {
         if (state.tDash <= 0 && !controller.actionRight.startedDown) {
-            state.tDash = +40;
+            state.tDash = +15;
         }
     }
     if (controller.actionLeft.endedDown) {
         if (state.tDash >= 0 && !controller.actionLeft.startedDown) {
-            state.tDash = -40;
+            state.tDash = -15;
         }
     }
     if (controller.actionUp.endedDown) {
@@ -70,8 +104,14 @@ gameCode.handleController = function (controller, state) {
         }
     }
 
-    state.playerX += controller.lStickX * 10;
-    state.playerY += controller.lStickY * 10;
+    var dPlayerX = controller.lStickX;
+    var dPlayerY = controller.lStickY;
+
+    dPlayerX *= 128;
+    dPlayerY *= 128;
+
+    state.playerX += dt * dPlayerX;
+    state.playerY += dt * dPlayerY;
 };
 
 function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {

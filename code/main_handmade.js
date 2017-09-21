@@ -97,6 +97,7 @@ function Controller() {
 function platformCreateInput(numControllers) {
     var i;
     var input = {
+        dtForFrame: 0,
         controllers: [],
         mouseX: 0,
         mouseY: 0,
@@ -528,7 +529,8 @@ function main() {
         var currentT = performance.now();
         var elapsedT = currentT - lastT;
         lastT = currentT;
-
+        newInput.dtForFrame = elapsedT / 1000;
+        
         // Avoid spikes when focusing back on blurred tab
         if (elapsedT < 1000) {
             frameCount++;

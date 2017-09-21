@@ -2,6 +2,7 @@
 
 var DEBUG_PERFORMANCE = false;
 var DEBUG_TONE = false;
+var DEBUG_SOUND = false;
 
 var functionStub = function () {};
 var gameCode = {};
@@ -122,16 +123,20 @@ function platformHandleGamepads(oldInput, newInput) {
     }
 }
 
+function clamp(value, min, max) {
+    return value < min ? min : value > max ? max : value;
+}
+
 function platformHandleInput(pad, oldController, newController) {
     var DEADZONE = 0.25;
     newController.isConnected = pad.connected;
     if (pad.connected) {
         newController.isLStickAnalog = Math.abs(pad.axes[0]) > DEADZONE || Math.abs(pad.axes[1]) > DEADZONE;
         newController.isRStickAnalog = Math.abs(pad.axes[2]) > DEADZONE || Math.abs(pad.axes[3]) > DEADZONE;
-        newController.lStickX = newController.isLStickAnalog ? pad.axes[0] : 0;
-        newController.lStickY = newController.isLStickAnalog ? pad.axes[1] : 0;
-        newController.rStickX = newController.isRStickAnalog ? pad.axes[2] : 0;
-        newController.rStickY = newController.isRStickAnalog ? pad.axes[3] : 0;
+        newController.lStickX = newController.isLStickAnalog ? clamp(pad.axes[0], -1, 1) : 0;
+        newController.lStickY = newController.isLStickAnalog ? clamp(pad.axes[1], -1, 1) : 0;
+        newController.rStickX = newController.isRStickAnalog ? clamp(pad.axes[2], -1, 1) : 0;
+        newController.rStickY = newController.isRStickAnalog ? clamp(pad.axes[3], -1, 1) : 0;
         newController.lTriggerValue = pad.buttons[6].value;
         newController.rTriggerValue = pad.buttons[7].value;
         processDigitalButton(oldController.actionDown, newController.actionDown, pad.buttons[0].pressed);
@@ -292,32 +297,80 @@ function setGameLoadInterval(gameCode, timeInterval) {
     }
 }
 
+function toggleRecording(inputRecorder, memory) {
+    if (inputRecorder.isPlaying) {
+        console.log("Stopped playing");
+        inputRecorder.isPlaying = false;
+    } else if (inputRecorder.isRecording) {
+        console.log("Started playing");
+        inputRecorder.isRecording = false;
+        inputRecorder.isPlaying = true;
+        inputRecorder.playIndex = 0;
+    } else {
+        console.log("Started recording");
+        inputRecorder.isRecording = true;
+        inputRecorder.savedInput = [];
+        saveMemory(inputRecorder, memory);        
+    }    
+}
+
+function saveMemory(inputRecorder, memory) {
+    inputRecorder.savedMemory = JSON.stringify(memory);
+}
+
+function restoreMemory(inputRecorder) {
+    return JSON.parse(inputRecorder.savedMemory);
+}
+
+// TODO: save some memory if repeated input?
+function playbackInput(inputRecorder)
+{
+    var currentInput = JSON.parse(inputRecorder.savedInput[inputRecorder.playIndex]);
+    inputRecorder.playIndex = (inputRecorder.playIndex + 1) % inputRecorder.savedInput.length;
+    return currentInput;
+}
+
+function recordInput(inputRecorder, newInput) {
+    inputRecorder.savedInput.push(JSON.stringify(newInput));
+}
+
+// TODO: Declared as globals for easy debugging, will move inside main later
+var inputRecorder, screen, backBuffer, audio, memory, keyboardPad, oldInput, newInput, soundOutput;
+
 function main() {
    
     loadGameCode(gameCode);
 
-    var screen = {};
-    var backBuffer = {};
-    var audio = {};
-    var memory = {
+    inputRecorder = {
+        isPlaying: false,
+        isRecording: false,
+        savedState: null,        
+        savedInput: [],
+        playIndex: 0
+    };
+    screen = {};
+    backBuffer = {};
+    audio = {};
+    memory = {
         isInitialized: false
-    }
+    };
     screen.canvas = document.createElement("canvas");
     backBuffer.canvas = document.createElement("canvas");
     backBuffer.bytesPerPixel = 4;
 
-    var keyboardPad = createKeyboadPad();
-    var oldInput = platformCreateInput(5);
-    var newInput = platformCreateInput(5);
+    keyboardPad = createKeyboadPad();
+    oldInput = platformCreateInput(5);
+    newInput = platformCreateInput(5);
 
-    var soundOutput = new SoundOutput();
+    soundOutput = new SoundOutput();
+
     var i, sample;
 
     platformInitAudioOutput(audio, soundOutput);
 
     //resizeBuffer(backBuffer, 480, 270);
-    //resizeBuffer(backBuffer, 960, 540);
-    resizeBuffer(backBuffer, 1920, 1080);
+    resizeBuffer(backBuffer, 960, 540);
+    //resizeBuffer(backBuffer, 1920, 1080);
     resizeScreen(screen, backBuffer);
 
     document.body.appendChild(screen.canvas);
@@ -333,8 +386,8 @@ function main() {
     };
     var holdingKey = {};
     window.onkeydown = function (evt) {
-        // first pressed
-        if (!(evt.keyCode in holdingKey) || !holdingKey[evt.keyCode]) {
+        var firstPress = !(evt.keyCode in holdingKey) || !holdingKey[evt.keyCode];
+        if (firstPress) {
             if (evt.keyCode === 112) {
                 // F1 - Hot reload game code
                 console.log("reloading");
@@ -345,12 +398,20 @@ function main() {
                 gameCode.autoReload = !gameCode.autoReload;
                 console.log("autoReload = " + gameCode.autoReload);
                 evt.preventDefault();
+            } else if (evt.keyCode === 114) {
+                // F3 - Cycle record/play/stop
+                toggleRecording(inputRecorder, memory);
+                evt.preventDefault();
             }
         }
         holdingKey[evt.keyCode] = true;
         platformHandleKeyboardPad(keyboardPad, true, evt.keyCode);
     };
     window.onkeyup = function (evt) {
+        var released = holdingKey[evt.keyCode];
+        if (released) {
+            // handle keys on release
+        }
         holdingKey[evt.keyCode] = false;
         platformHandleKeyboardPad(keyboardPad, false, evt.keyCode);
     };
@@ -362,33 +423,48 @@ function main() {
     var currentDebugMaker = 0;
     
     var loop = function () {
+
         platformHandleInput(keyboardPad, oldInput.controllers[0], newInput.controllers[0]);
         platformHandleGamepads(oldInput, newInput);
+
+        if (inputRecorder.isPlaying) {
+            if (inputRecorder.playIndex === 0) {
+                memory = restoreMemory(inputRecorder);
+            }
+            newInput = playbackInput(inputRecorder);
+        }
+
+        if (inputRecorder.isRecording) {
+            recordInput(inputRecorder, newInput);            
+        }
+        
         gameCode.updateAndRender(memory, backBuffer, newInput);
         gameCode.getSoundSamples(memory, soundOutput);
         
-        // playcursor markers
-        debugMarkers[currentDebugMaker] = soundOutput.getPlayCursor() / soundOutput.bufferLength * backBuffer.width;
-        for (var i = 0; i < debugMarkers.length; i++) {
-            debugDrawVertical(backBuffer, debugMarkers[i], 10, backBuffer.height/2, i === currentDebugMaker ? {r: 255, g: 255, b: 255} : {r: 255, g: 0, b: 0});
-        }
-        currentDebugMaker = (currentDebugMaker + 1) % 10;
-        
-        // draw sound buffer samples
-        var offset, sample, x;
-        for (x = 0; x < backBuffer.width; x++) {
-            offset = Math.floor(x / backBuffer.width * soundOutput.bufferLength);
-            sample = soundOutput.left[offset] * backBuffer.height*0.05;
-            if (sample < 0) {
-                debugDrawVertical(backBuffer, x, backBuffer.height*.25 + sample, backBuffer.height*.25, {r: 255, g: 255, b: 0});
-            } else if (sample > 0) {
-                debugDrawVertical(backBuffer, x, backBuffer.height*.25, sample + backBuffer.height*.25, {r: 0, g: 255, b: 0});
+        if (DEBUG_SOUND) {
+            // playcursor markers
+            debugMarkers[currentDebugMaker] = soundOutput.getPlayCursor() / soundOutput.bufferLength * backBuffer.width;
+            for (var i = 0; i < debugMarkers.length; i++) {
+                debugDrawVertical(backBuffer, debugMarkers[i], 10, backBuffer.height/2, i === currentDebugMaker ? {r: 255, g: 255, b: 255} : {r: 255, g: 0, b: 0});
             }
-            sample = soundOutput.right[offset] * backBuffer.height*0.05;
-            if (sample < 0) {
-                debugDrawVertical(backBuffer, x, backBuffer.height*.5 + sample, backBuffer.height*.5, {r: 255, g: 0, b: 255});
-            } else if (sample > 0) {
-                debugDrawVertical(backBuffer, x, backBuffer.height*.5, sample + backBuffer.height*.5, {r: 0, g: 0, b: 255});
+            currentDebugMaker = (currentDebugMaker + 1) % 10;
+            
+            // draw sound buffer samples
+            var offset, sample, x;
+            for (x = 0; x < backBuffer.width; x++) {
+                offset = Math.floor(x / backBuffer.width * soundOutput.bufferLength);
+                sample = soundOutput.left[offset] * backBuffer.height*0.05;
+                if (sample < 0) {
+                    debugDrawVertical(backBuffer, x, backBuffer.height*.25 + sample, backBuffer.height*.25, {r: 255, g: 255, b: 0});
+                } else if (sample > 0) {
+                    debugDrawVertical(backBuffer, x, backBuffer.height*.25, sample + backBuffer.height*.25, {r: 0, g: 255, b: 0});
+                }
+                sample = soundOutput.right[offset] * backBuffer.height*0.05;
+                if (sample < 0) {
+                    debugDrawVertical(backBuffer, x, backBuffer.height*.5 + sample, backBuffer.height*.5, {r: 255, g: 0, b: 255});
+                } else if (sample > 0) {
+                    debugDrawVertical(backBuffer, x, backBuffer.height*.5, sample + backBuffer.height*.5, {r: 0, g: 0, b: 255});
+                }
             }
         }
 
@@ -403,18 +479,18 @@ function main() {
         var elapsedT = currentT - lastT;
         lastT = currentT;
 
-        if (DEBUG_PERFORMANCE) {
-            // Avoid spikes when focusing back on blurred tab
-            if (elapsedT < 1000) {
-                frameCount++;
-                totalT += elapsedT;
-                if (totalT > 1000) {
-                    var avgFramesPerSec = frameCount / totalT * 1000;
-                    var avgMsPerFrame = totalT / frameCount;
+        // Avoid spikes when focusing back on blurred tab
+        if (elapsedT < 1000) {
+            frameCount++;
+            totalT += elapsedT;
+            if (totalT > 1000) {
+                var avgFramesPerSec = frameCount / totalT * 1000;
+                var avgMsPerFrame = totalT / frameCount;
+                if (DEBUG_PERFORMANCE) {
                     console.log("Avg: " + avgMsPerFrame + " ms/f, " + avgFramesPerSec + " f/s");
-                    frameCount = 0;
-                    totalT -= 1000;
                 }
+                frameCount = 0;
+                totalT -= 1000;
             }
         }
 

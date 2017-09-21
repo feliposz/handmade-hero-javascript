@@ -9,18 +9,38 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
             volume: 0,
             hold: 0,
             greenOffset: 0,
-            blueOffset: 0
+            blueOffset: 0,
+            playerX: backBuffer.width/2,
+            playerY: backBuffer.height/2,
+            tJump: 0,
+            tDash: 0
         }
     }
 
     var i, gameState = memory.gameState;
 
     for (i = 0; i < input.controllers.length; i++) {
-        if (input.controllers[i]) {
+        if (input.controllers[i].isConnected) {
             gameCode.handleController(input.controllers[i], gameState);
         }
     }
+    
+    if (gameState.tJump > 0) {
+        gameState.tJump -= 3;
+    } else {
+        gameState.tJump = 0;
+    }
+
+    gameState.playerX += gameState.tDash;
+    if (Math.abs(gameState.tDash) < 1) {
+        gameState.tDash = 0;
+    } else {
+        gameState.tDash *= 0.9;
+    }
+    
     gameCode.renderGreenBlueGradient(backBuffer, gameState.greenOffset, gameState.blueOffset);
+    var jump = 200 * Math.sin(gameState.tJump / 100.0 * Math.PI);
+    gameCode.renderPlayer(backBuffer, gameState.playerX, gameState.playerY - jump);
 };
 
 gameCode.handleController = function (controller, state) {
@@ -32,21 +52,33 @@ gameCode.handleController = function (controller, state) {
         state.tone = 261;
         state.volume = 1;
         state.hold = 100;
+        if (state.tJump === 0 && !controller.actionDown.startedDown) {
+            state.playerY += 50;
+        }
     }
     if (controller.actionRight.endedDown) {
         state.tone = 293;
         state.volume = 1;
         state.hold = 100;
+        if (state.tDash <= 0 && !controller.actionRight.startedDown) {
+            state.tDash = +40;
+        }
     }
     if (controller.actionLeft.endedDown) {
         state.tone = 329;
         state.volume = 1;
         state.hold = 100;
+        if (state.tDash >= 0 && !controller.actionLeft.startedDown) {
+            state.tDash = -40;
+        }
     }
     if (controller.actionUp.endedDown) {
         state.tone = 349;
         state.volume = 1;
         state.hold = 100;
+        if (state.tJump === 0 && !controller.actionUp.startedDown) {
+            state.tJump = 100;
+        }
     }
     if (controller.dPadDown.endedDown) {
         state.tone = 392;
@@ -90,6 +122,7 @@ gameCode.handleController = function (controller, state) {
         state.waveType = "saw";
     }
 
+    /*
     if (controller.isLStickAnalog) {
         state.tone = Math.floor(128 + (1 + controller.lStickX) / 2 * 256);
     } else {
@@ -105,9 +138,13 @@ gameCode.handleController = function (controller, state) {
         if (state.volume < 0) { state.volume = 0; }
         if (state.volume > 384) { state.volume = 1; }
     }
+    */
 
-    state.greenOffset -= controller.rStickX * 5;
-    state.blueOffset -= controller.rStickY * 5;
+    state.greenOffset += controller.rStickX * 5;
+    state.blueOffset += controller.rStickY * 5;
+
+    state.playerX += controller.lStickX * 10;
+    state.playerY += controller.lStickY * 10;
 
     // color offsets must be positives!
     while (state.greenOffset < 0) {
@@ -120,11 +157,12 @@ gameCode.handleController = function (controller, state) {
 
 gameCode.renderGreenBlueGradient = function (buffer, greenOffset, blueOffset) {
     var x, y, r, g, b, a, rowOffset, columnOffset;
-    for (y = 0; y < buffer.height; y++) {
-        rowOffset = y * buffer.width * buffer.bytesPerPixel;
-        for (x = 0; x < buffer.width; x++) {
+    var h = buffer.height, w = buffer.width;
+    for (y = 0; y < h; y++) {
+        rowOffset = y * w * buffer.bytesPerPixel;
+        for (x = 0; x < w; x++) {
             columnOffset = rowOffset + x * buffer.bytesPerPixel;
-            r = Math.floor(y * 255 / buffer.height);
+            r = Math.floor(y * 255 / h);
             g = (x + greenOffset) % 256;
             b = (y + blueOffset) % 256;
             a = 255;
@@ -134,6 +172,26 @@ gameCode.renderGreenBlueGradient = function (buffer, greenOffset, blueOffset) {
             buffer.bitmap.data[columnOffset + 3] = a;
         }
     }
+};
+
+gameCode.renderPlayer = function (buffer, playerX, playerY) {
+    var x, y, r, g, b, a, rowOffset, columnOffset;
+    var h = buffer.height, w = buffer.width;
+    var size = 20;
+    for (y = playerY|0; y < playerY+size; y++) {
+        rowOffset = y * w * buffer.bytesPerPixel;
+        for (x = playerX|0; x < playerX+size; x++) {
+            columnOffset = Math.floor(rowOffset + x * buffer.bytesPerPixel);
+            r = 255;
+            g = 255;
+            b = 255;
+            a = 255;
+            buffer.bitmap.data[columnOffset + 0] = r;
+            buffer.bitmap.data[columnOffset + 1] = g;
+            buffer.bitmap.data[columnOffset + 2] = b;
+            buffer.bitmap.data[columnOffset + 3] = a;
+        }
+    }    
 };
 
 gameCode.getSoundSamples = function (memory, output) {

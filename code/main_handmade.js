@@ -3,16 +3,17 @@
 var DEBUG_PERFORMANCE = false;
 var DEBUG_TONE = false;
 var DEBUG_SOUND = false;
+var DEBUG_MOUSE = false;
 
-var functionStub = function () {};
 var gameCode = {};
 gameCode.lastReload = null;
 gameCode.autoReload = false;
 gameCode.autoReloadCountDown = 0;
-gameCode.updateAndRender = functionStub;
-gameCode.handleController = functionStub;
-gameCode.renderGreenBlueGradient = functionStub;
-gameCode.getSoundSamples = functionStub;
+
+var utils = {};
+utils.clamp = function (value, min, max) {
+    return value < min ? min : value > max ? max : value;
+}
 
 function displayBuffer(screen, buffer) {
     buffer.canvas.getContext("2d").putImageData(buffer.bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
@@ -45,8 +46,8 @@ function debugDrawVertical(buffer, x, top, bottom, color) {
     x = Math.floor(x);
     top = Math.floor(top);
     bottom = Math.floor(bottom);
-    //top = top < 0 ? 0 : top > buffer.height ? buffer.height : top;
-    //bottom = bottom < 0 ? 0 : bottom > buffer.height ? buffer.height : bottom;
+    top = utils.clamp(top, 0, buffer.height);
+    bottom = utils.clamp(bottom, 0, buffer.height);
     var offset = top * buffer.pitch + x * buffer.bytesPerPixel;
     for (y = top; y <= bottom; y++) {
         buffer.bitmap.data[offset + 0] = color.r;
@@ -134,20 +135,16 @@ function platformHandleGamepads(oldInput, newInput) {
     }
 }
 
-function clamp(value, min, max) {
-    return value < min ? min : value > max ? max : value;
-}
-
 function platformHandleInput(pad, oldController, newController) {
     var DEADZONE = 0.25;
     newController.isConnected = pad.connected;
     if (pad.connected) {
         newController.isLStickAnalog = Math.abs(pad.axes[0]) > DEADZONE || Math.abs(pad.axes[1]) > DEADZONE;
         newController.isRStickAnalog = Math.abs(pad.axes[2]) > DEADZONE || Math.abs(pad.axes[3]) > DEADZONE;
-        newController.lStickX = newController.isLStickAnalog ? clamp(pad.axes[0], -1, 1) : 0;
-        newController.lStickY = newController.isLStickAnalog ? clamp(pad.axes[1], -1, 1) : 0;
-        newController.rStickX = newController.isRStickAnalog ? clamp(pad.axes[2], -1, 1) : 0;
-        newController.rStickY = newController.isRStickAnalog ? clamp(pad.axes[3], -1, 1) : 0;
+        newController.lStickX = newController.isLStickAnalog ? utils.clamp(pad.axes[0], -1, 1) : 0;
+        newController.lStickY = newController.isLStickAnalog ? utils.clamp(pad.axes[1], -1, 1) : 0;
+        newController.rStickX = newController.isRStickAnalog ? utils.clamp(pad.axes[2], -1, 1) : 0;
+        newController.rStickY = newController.isRStickAnalog ? utils.clamp(pad.axes[3], -1, 1) : 0;
         newController.lTriggerValue = pad.buttons[6].value;
         newController.rTriggerValue = pad.buttons[7].value;
         processDigitalButton(oldController.actionDown, newController.actionDown, pad.buttons[0].pressed);
@@ -242,7 +239,6 @@ function platformHandleMouse(screen, mouse, evt) {
     var rect = screen.canvas.getBoundingClientRect();
     mouse.x = evt.clientX - rect.left;
     mouse.y = evt.clientY - rect.top;
-    //if (evt.type === "mousedown")
     mouse.buttons[0] = (evt.buttons & 1) > 0;
     mouse.buttons[1] = (evt.buttons & 2) > 0;
     mouse.buttons[2] = (evt.buttons & 4) > 0;
@@ -291,8 +287,6 @@ function platformInitAudioOutput(audio, output) {
 
     buffer.copyFromChannel(output.left, 0);
     buffer.copyFromChannel(output.right, 1);
-    //output.left = buffer.getChannelData(0);
-    //output.right = buffer.getChannelData(1);
 
     gain.gain.value = 0.2;
     source.buffer = buffer;
@@ -364,7 +358,7 @@ function restoreMemory(inputRecorder) {
     return JSON.parse(inputRecorder.savedMemory);
 }
 
-// TODO: save some memory if repeated input?
+// TODO: reduce memory use when storing repeated input?
 function playbackInput(inputRecorder)
 {
     var currentInput = JSON.parse(inputRecorder.savedInput[inputRecorder.playIndex]);
@@ -423,10 +417,10 @@ function main() {
         resizeScreen(screen, backBuffer, backBuffer.width, backBuffer.height);
     };
     window.onfocus = function () {
-        console.log("focus");
+        //console.log("focus");
     };
     window.onblur = function () {
-        console.log("blur");
+        //console.log("blur");
     };
     var holdingKey = {};
     window.onkeydown = function (evt) {
@@ -489,8 +483,13 @@ function main() {
             recordInput(inputRecorder, newInput);            
         }
         
-        gameCode.updateAndRender(memory, backBuffer, newInput);
-        gameCode.getSoundSamples(memory, soundOutput);
+        if ("updateAndRender" in gameCode) {
+            gameCode.updateAndRender(memory, backBuffer, newInput);
+        }
+
+        if ("getSoundSamples" in gameCode) {
+            gameCode.getSoundSamples(memory, soundOutput);
+        }
         
         if (DEBUG_SOUND) {
             // playcursor markers

@@ -3,13 +3,7 @@
 gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
-        memory.gameState = {
-            waveType: "sine",
-            tone: 256,
-            volume: 0,
-            hold: 0,
-            greenOffset: 0,
-            blueOffset: 0,
+        memory.gameState = {            
             playerX: backBuffer.width/2,
             playerY: backBuffer.height/2,
             tJump: 0,
@@ -38,174 +32,73 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
         gameState.tDash *= 0.9;
     }
     
-    gameCode.renderGreenBlueGradient(backBuffer, gameState.greenOffset, gameState.blueOffset);
+    drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
     var jump = 200 * Math.sin(gameState.tJump / 100.0 * Math.PI);
-    gameCode.renderPlayer(backBuffer, gameState.playerX, gameState.playerY - jump);
+    drawRectangle(backBuffer, gameState.playerX, gameState.playerY-jump, gameState.playerX+10, gameState.playerY+10-jump, 1, 1, 0);
 
-    gameCode.renderPlayer(backBuffer, input.mouseX, input.mouseY);
-    for (var i = 0; i < input.mouseButtons.length; i++) {
-        if (input.mouseButtons[i].endedDown) {
-            gameCode.renderPlayer(backBuffer, 10 + 25 * i, 10);
+    if (DEBUG_MOUSE) {
+        drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX+10, input.mouseY+10, 1, 1, 0);
+        for (var i = 0; i < input.mouseButtons.length; i++) {
+            if (input.mouseButtons[i].endedDown) {
+                drawRectangle(backBuffer, 10 + 25 * i, 10, 20 + 25 * i, 20, 1, 0, 0);
+            }  else {
+                drawRectangle(backBuffer, 10 + 25 * i, 10, 20 + 25 * i, 20, 0, 0, 1);
+            }
         }
     }
 };
 
 gameCode.handleController = function (controller, state) {
-    if (state.hold > 0 && state.volume > 0) {
-        state.volume -= 0.01;
-        state.hold--;
-    }
     if (controller.actionDown.endedDown) {
-        state.tone = 261;
-        state.volume = 1;
-        state.hold = 100;
         if (state.tJump === 0 && !controller.actionDown.startedDown) {
             state.playerY += 50;
         }
     }
     if (controller.actionRight.endedDown) {
-        state.tone = 293;
-        state.volume = 1;
-        state.hold = 100;
         if (state.tDash <= 0 && !controller.actionRight.startedDown) {
             state.tDash = +40;
         }
     }
     if (controller.actionLeft.endedDown) {
-        state.tone = 329;
-        state.volume = 1;
-        state.hold = 100;
         if (state.tDash >= 0 && !controller.actionLeft.startedDown) {
             state.tDash = -40;
         }
     }
     if (controller.actionUp.endedDown) {
-        state.tone = 349;
-        state.volume = 1;
-        state.hold = 100;
         if (state.tJump === 0 && !controller.actionUp.startedDown) {
             state.tJump = 100;
         }
     }
-    if (controller.dPadDown.endedDown) {
-        state.tone = 392;
-        state.volume = 1;
-        state.hold = 100;
-    }
-    if (controller.dPadRight.endedDown) {
-        state.tone = 440;
-        state.volume = 1;
-        state.hold = 100;
-    }
-    if (controller.dPadLeft.endedDown) {
-        state.tone = 494;
-        state.volume = 1;
-        state.hold = 100;
-    }
-    if (controller.dPadUp.endedDown) {
-        state.tone = 523;
-        state.volume = 1;
-        state.hold = 100;
-    }
-
-    if (controller.start.endedDown) {
-        state.volume = 1;
-        state.hold = 0;
-    }
-    if (controller.back.endedDown) {
-        state.volume = 0;
-    }
-
-    if (controller.rShoulder.endedDown) {
-        state.waveType = "sine";
-    }
-    if (controller.lShoulder.endedDown) {
-        state.waveType = "square";
-    }
-    if (controller.lStickThumb.endedDown) {
-        state.waveType = "triangle";
-    }
-    if (controller.rStickThumb.endedDown) {
-        state.waveType = "saw";
-    }
-
-    /*
-    if (controller.isLStickAnalog) {
-        state.tone = Math.floor(128 + (1 + controller.lStickX) / 2 * 256);
-    } else {
-        state.tone += controller.lStickX * 2;
-        if (state.tone < 27) { state.tone = 27; }
-        if (state.tone > 4000) { state.tone = 4000; }
-    }
-    if (controller.isLStickAnalog) {
-        state.volume = 1 - controller.lStickY;
-        state.hold = 0;
-    } else {
-        state.volume -= controller.lStickY * 0.05;
-        if (state.volume < 0) { state.volume = 0; }
-        if (state.volume > 384) { state.volume = 1; }
-    }
-    */
-
-    state.greenOffset += controller.rStickX * 5;
-    state.blueOffset += controller.rStickY * 5;
 
     state.playerX += controller.lStickX * 10;
     state.playerY += controller.lStickY * 10;
-
-    // color offsets must be positives!
-    while (state.greenOffset < 0) {
-        state.greenOffset += 256;
-    }
-    while (state.blueOffset < 0) {
-        state.blueOffset += 256;
-    }
 };
 
-gameCode.renderGreenBlueGradient = function (buffer, greenOffset, blueOffset) {
-    var x, y, r, g, b, a, rowOffset, columnOffset;
+function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {
+    var x, y, rowOffset, columnOffset;
     var h = buffer.height, w = buffer.width;
-    for (y = 0; y < h; y++) {
+    minX = Math.round(minX);
+    maxX = Math.round(maxX);
+    minY = Math.round(minY);
+    maxY = Math.round(maxY);
+    minX = utils.clamp(minX, 0, w);
+    minY = utils.clamp(minY, 0, h);
+    maxX = utils.clamp(maxX, 0, w);
+    maxY = utils.clamp(maxY, 0, h);
+    for (y = minY; y < maxY; y++) {
         rowOffset = y * w * buffer.bytesPerPixel;
-        for (x = 0; x < w; x++) {
+        for (x = minX; x < maxX; x++) {
             columnOffset = rowOffset + x * buffer.bytesPerPixel;
-            r = Math.floor(y * 255 / h);
-            g = (x + greenOffset) % 256;
-            b = (y + blueOffset) % 256;
-            a = 255;
-            buffer.bitmap.data[columnOffset + 0] = r;
-            buffer.bitmap.data[columnOffset + 1] = g;
-            buffer.bitmap.data[columnOffset + 2] = b;
-            buffer.bitmap.data[columnOffset + 3] = a;
-        }
-    }
-};
-
-gameCode.renderPlayer = function (buffer, playerX, playerY) {
-    var x, y, r, g, b, a, rowOffset, columnOffset;
-    var h = buffer.height, w = buffer.width;
-    var size = 20;
-    for (y = playerY|0; y < playerY+size; y++) {
-        rowOffset = y * w * buffer.bytesPerPixel;
-        for (x = playerX|0; x < playerX+size; x++) {
-            columnOffset = Math.floor(rowOffset + x * buffer.bytesPerPixel);
-            r = 255;
-            g = 255;
-            b = 255;
-            a = 255;
-            buffer.bitmap.data[columnOffset + 0] = r;
-            buffer.bitmap.data[columnOffset + 1] = g;
-            buffer.bitmap.data[columnOffset + 2] = b;
-            buffer.bitmap.data[columnOffset + 3] = a;
+            buffer.bitmap.data[columnOffset + 0] = Math.floor(r * 255);
+            buffer.bitmap.data[columnOffset + 1] = Math.floor(g * 255);
+            buffer.bitmap.data[columnOffset + 2] = Math.floor(b * 255);
+            buffer.bitmap.data[columnOffset + 3] = 255;
         }
     }    
-};
+}
 
 gameCode.getSoundSamples = function (memory, output) {
-    var tone = memory.gameState.tone, volume = memory.gameState.volume, waveType = memory.gameState.waveType;
-    var wavePeriod = output.sampleRate / tone;
-
-    var i, offset, sample, PI2 = Math.PI * 2, increment = PI2 / wavePeriod;
+    var i, offset, sample;
 
     // TODO: should probably get average FPS instead of fixed 60
     var secondsPerFrame = 1 / 60;
@@ -227,31 +120,13 @@ gameCode.getSoundSamples = function (memory, output) {
             startWriteCursor += output.bufferLength;
         }
     }
-    //console.log(`Play: ${playCursor}, Last: ${output.lastWriteCursor}, Start: ${startWriteCursor}, End: ${endWriteCursor}, Count: ${writeCount}`);
     output.lastWriteCursor = endWriteCursor;
 
     for (i = 0; i < writeCount; i++) {
-        if (waveType === "sine") {
-            sample = Math.sin(output.tSine);
-        } else if (waveType === "square") {
-            sample = Math.sign(Math.sin(output.tSine));
-        } else if (waveType === "triangle") {
-            sample = Math.abs((output.tSine % PI2) - Math.PI) - Math.PI / 2;
-        } else if (waveType === "saw") {
-            sample = ((output.tSine % PI2) - Math.PI) / Math.PI;
-        }
         offset = (i + startWriteCursor) % output.bufferLength;
-
-        //output.left[offset] = sample * volume * (1-(offset / output.bufferLength));
-        //output.right[offset] = sample * volume * (offset / output.bufferLength);
-        output.left[offset] = sample * volume;
-        output.right[offset] = sample * volume;
-
-        output.tSine += increment;
-    }
-
-    while (output.tSine > PI2) {
-        output.tSine -= PI2;
+        sample = 0;
+        output.left[offset] = sample;
+        output.right[offset] = sample;
     }
 
 };

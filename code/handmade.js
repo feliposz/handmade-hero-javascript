@@ -41,6 +41,13 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     gameCode.renderGreenBlueGradient(backBuffer, gameState.greenOffset, gameState.blueOffset);
     var jump = 200 * Math.sin(gameState.tJump / 100.0 * Math.PI);
     gameCode.renderPlayer(backBuffer, gameState.playerX, gameState.playerY - jump);
+
+    gameCode.renderPlayer(backBuffer, input.mouseX, input.mouseY);
+    for (var i = 0; i < input.mouseButtons.length; i++) {
+        if (input.mouseButtons[i].endedDown) {
+            gameCode.renderPlayer(backBuffer, 10 + 25 * i, 10);
+        }
+    }
 };
 
 gameCode.handleController = function (controller, state) {

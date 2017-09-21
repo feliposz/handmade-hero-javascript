@@ -31,9 +31,9 @@ function resizeBuffer(buffer, width, height) {
     buffer.bitmap = buffer.canvas.getContext("2d").getImageData(0, 0, buffer.width, buffer.height);
 }
 
-function resizeScreen(screen, buffer) {
-    screen.width = window.innerWidth;
-    screen.height = window.innerHeight;
+function resizeScreen(screen, buffer, width, height) {
+    screen.width = width;
+    screen.height = height;
     screen.canvas.width = screen.width;
     screen.canvas.height = screen.height;
     screen.canvas.getContext("2d").scale(screen.width / buffer.width, screen.height / buffer.height);
@@ -67,6 +67,8 @@ function Controller() {
     this.isConnected = false;
     this.isLStickAnalog = false;
     this.isRStickAnalog = false;
+    this.mouseX = 0;
+    this.mouseY = 0;
     this.lStickX = 0;
     this.lStickY = 0;
     this.rStickX = 0;
@@ -94,7 +96,16 @@ function Controller() {
 function platformCreateInput(numControllers) {
     var i;
     var input = {
-        controllers: []
+        controllers: [],
+        mouseX: 0,
+        mouseY: 0,
+        mouseButtons: [
+            new GameButtonState(), 
+            new GameButtonState(), 
+            new GameButtonState(), 
+            new GameButtonState(), 
+            new GameButtonState()
+        ]
     };
     for (i = 0; i < numControllers; i++) {
         input.controllers[i] = new Controller();
@@ -188,6 +199,15 @@ function createKeyboadPad() {
     return pad;
 }
 
+function createMouse() {
+    var mouse = {
+        x: 0,
+        y: 0,
+        buttons: [false, false, false, false, false]
+    };
+    return mouse;
+}
+
 function platformHandleKeyboardPad(pad, pressed, keyCode) {
     pad.connected = true;
     switch (keyCode) {
@@ -216,6 +236,28 @@ function platformHandleKeyboardPad(pad, pressed, keyCode) {
         case 100: pad.buttons[14].pressed = pressed; pad.buttons[14].value = pressed ? +1 : 0; break; // Numpad 4 left
         case 102: pad.buttons[15].pressed = pressed; pad.buttons[15].value = pressed ? +1 : 0; break; // Numpad 6 right
     }
+}
+
+function platformHandleMouse(screen, mouse, evt) {
+    var rect = screen.canvas.getBoundingClientRect();
+    mouse.x = evt.clientX - rect.left;
+    mouse.y = evt.clientY - rect.top;
+    //if (evt.type === "mousedown")
+    mouse.buttons[0] = (evt.buttons & 1) > 0;
+    mouse.buttons[1] = (evt.buttons & 2) > 0;
+    mouse.buttons[2] = (evt.buttons & 4) > 0;
+    mouse.buttons[3] = (evt.buttons & 8) > 0;
+    mouse.buttons[4] = (evt.buttons & 16) > 0;
+}
+
+function platformHandleMouseInput(mouse, oldInput, newInput) {
+    newInput.mouseX = mouse.x;
+    newInput.mouseY = mouse.y;
+    processDigitalButton(oldInput.mouseButtons[0], newInput.mouseButtons[0], mouse.buttons[0]);
+    processDigitalButton(oldInput.mouseButtons[1], newInput.mouseButtons[1], mouse.buttons[1]);
+    processDigitalButton(oldInput.mouseButtons[2], newInput.mouseButtons[2], mouse.buttons[2]);
+    processDigitalButton(oldInput.mouseButtons[3], newInput.mouseButtons[3], mouse.buttons[3]);
+    processDigitalButton(oldInput.mouseButtons[4], newInput.mouseButtons[4], mouse.buttons[4]);
 }
 
 function SoundOutput() {
@@ -335,7 +377,7 @@ function recordInput(inputRecorder, newInput) {
 }
 
 // TODO: Declared as globals for easy debugging, will move inside main later
-var inputRecorder, screen, backBuffer, audio, memory, keyboardPad, oldInput, newInput, soundOutput;
+var inputRecorder, screen, backBuffer, audio, memory, keyboardPad, oldInput, newInput, soundOutput, mouse;
 
 function main() {
    
@@ -348,6 +390,7 @@ function main() {
         savedInput: [],
         playIndex: 0
     };
+    mouse = createMouse();
     screen = {};
     backBuffer = {};
     audio = {};
@@ -371,12 +414,13 @@ function main() {
     //resizeBuffer(backBuffer, 480, 270);
     resizeBuffer(backBuffer, 960, 540);
     //resizeBuffer(backBuffer, 1920, 1080);
-    resizeScreen(screen, backBuffer);
+    resizeScreen(screen, backBuffer, backBuffer.width, backBuffer.height);
 
-    document.body.appendChild(screen.canvas);
+    document.getElementById("gameDiv").appendChild(screen.canvas);
 
     window.onresize = function () {
-        resizeScreen(screen, backBuffer);
+        //resizeScreen(screen, backBuffer, window.innerWidth, window.innerHeight);
+        resizeScreen(screen, backBuffer, backBuffer.width, backBuffer.height);
     };
     window.onfocus = function () {
         console.log("focus");
@@ -416,6 +460,12 @@ function main() {
         platformHandleKeyboardPad(keyboardPad, false, evt.keyCode);
     };
 
+    screen.canvas.onmousedown = function(evt) { platformHandleMouse(screen, mouse, evt); };
+    screen.canvas.onmouseup = function(evt) { platformHandleMouse(screen, mouse, evt); };
+    screen.canvas.onmousemove = function(evt) { platformHandleMouse(screen, mouse, evt); };
+    screen.canvas.onmousewheel = function(evt) { platformHandleMouse(screen, mouse, evt); };
+    screen.canvas.oncontextmenu = function (evt) { evt.preventDefault(); }
+
     var lastT = performance.now();
     var totalT = 0;
     var frameCount = 0;
@@ -424,6 +474,7 @@ function main() {
     
     var loop = function () {
 
+        platformHandleMouseInput(mouse, oldInput, newInput);
         platformHandleInput(keyboardPad, oldInput.controllers[0], newInput.controllers[0]);
         platformHandleGamepads(oldInput, newInput);
 

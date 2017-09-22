@@ -5,52 +5,66 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
         memory.isInitialized = true;
         memory.gameState = {            
             playerX: backBuffer.width/2,
-            playerY: backBuffer.height/2,
+            playerY: backBuffer.height/2+100,
             tJump: 0,
-            tDash: 0
-        }
+            tDash: 0            
+        };
+        memory.world = createWorld()
     }
 
-    var i, gameState = memory.gameState;
+    var state = memory.gameState;
+    var world = memory.world;
+    var tileMap = getTileMap(world, 0, 0);
 
-    for (i = 0; i < input.controllers.length; i++) {
+    for (var i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i].isConnected) {
-            gameCode.handleController(input.controllers[i], gameState, input.dtForFrame);
+            var controller = input.controllers[i];
+            var dt = input.dtForFrame;
+            if (controller.actionUp.endedDown) {
+                if (state.tJump === 0 && !controller.actionUp.startedDown) {
+                    state.tJump = 100;
+                }
+            }        
+
+            var dPlayerX = controller.lStickX;
+            var dPlayerY = controller.lStickY;
+        
+            dPlayerX *= 128;
+            dPlayerY *= 128;
+        
+            var newPlayerX = state.playerX + dt * dPlayerX;
+            var newPlayerY = state.playerY + dt * dPlayerY;
+            
+            if (isTileMapPointEmpty(world, tileMap, newPlayerX - 0.5 * playerWidth, newPlayerY) && 
+                isTileMapPointEmpty(world, tileMap, newPlayerX + 0.5 * playerWidth, newPlayerY) && 
+                isTileMapPointEmpty(world, tileMap, newPlayerX, newPlayerY)) {
+                state.playerX = newPlayerX;
+                state.playerY = newPlayerY;
+            }            
         }
     }
     
-    if (gameState.tJump > 0) {
-        gameState.tJump -= 3;
+    if (state.tJump > 0) {
+        state.tJump -= 3;
     } else {
-        gameState.tJump = 0;
+        state.tJump = 0;
     }
 
-    gameState.playerX += gameState.tDash;
-    if (Math.abs(gameState.tDash) < 1) {
-        gameState.tDash = 0;
+    state.playerX += state.tDash;
+    if (Math.abs(state.tDash) < 1) {
+        state.tDash = 0;
     } else {
-        gameState.tDash *= 0.9;
+        state.tDash *= 0.9;
     }
     
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
-
-    var tileWidth = 60;
-    var tileHeight = 60;
-    var tileMap = [
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ]
-    ];
-
+    
     for (var row = 0; row < tileMap.length; row++) {
         for (var col = 0; col < tileMap[row].length; col++) {
-            var minX = (col-0.5) * tileWidth, minY = row * tileHeight, maxX = (col+0.5) * tileWidth, maxY = (row+1) * tileHeight;
+            var minX = col * world.tileSide + world.offsetX;
+            var minY = row * world.tileSide + world.offsetY;
+            var maxX = minX + world.tileSide;
+            var maxY = minY + world.tileSide;
             var tileId = tileMap[row][col];
             var gray = 0.5;
             if (tileId == 1) {
@@ -60,16 +74,14 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
         }
     }
 
-    var jump = 70 * Math.sin(gameState.tJump / 100.0 * Math.PI);
-    var playerWidth = 50;
-    var playerHeight = 70;
-    var playerLeft = gameState.playerX - 0.5 * playerWidth;
-    var playerTop = gameState.playerY - jump - 0.5 * playerHeight;
+    var jump = 70 * Math.sin(state.tJump / 100.0 * Math.PI);
+    var playerLeft = state.playerX - 0.5 * playerWidth + world.offsetX;
+    var playerTop = state.playerY - jump - playerHeight + world.offsetY;
     var playerR = 1;
     var playerG = 1;
-    var playerB = 0;
+    var playerB = 0;    
     drawRectangle(backBuffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);   
-
+    
     if (DEBUG_MOUSE) {
         drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX+10, input.mouseY+10, 1, 1, 0);
         for (var i = 0; i < input.mouseButtons.length; i++) {
@@ -82,37 +94,98 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
 };
 
-gameCode.handleController = function (controller, state, dt) {
-    if (controller.actionDown.endedDown) {
-        if (state.tJump === 0 && !controller.actionDown.startedDown) {
-            state.playerY += 50;
-        }
-    }
-    if (controller.actionRight.endedDown) {
-        if (state.tDash <= 0 && !controller.actionRight.startedDown) {
-            state.tDash = +15;
-        }
-    }
-    if (controller.actionLeft.endedDown) {
-        if (state.tDash >= 0 && !controller.actionLeft.startedDown) {
-            state.tDash = -15;
-        }
-    }
-    if (controller.actionUp.endedDown) {
-        if (state.tJump === 0 && !controller.actionUp.startedDown) {
-            state.tJump = 100;
-        }
-    }
+// TODO: temporary for collision check below
+var playerWidth = 50;
+var playerHeight = 70;
 
-    var dPlayerX = controller.lStickX;
-    var dPlayerY = controller.lStickY;
+gameCode.handleController = function (controller, state, dt, world, tileMap) {
 
-    dPlayerX *= 128;
-    dPlayerY *= 128;
-
-    state.playerX += dt * dPlayerX;
-    state.playerY += dt * dPlayerY;
 };
+
+function createWorld() {
+    var world = {};
+    world.tileSide = 60;
+    world.tileMapCountX = 2;
+    world.tileMapCountY = 2;
+    world.tileCountX = 17;
+    world.tileCountY = 9;
+    world.offsetX = -30;
+    world.offsetY = 0;
+    world.tileMaps = [];
+
+    // Upper left
+    world.tileMaps.push([
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+    ]);
+
+    // Lower left
+    world.tileMaps.push([
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0 ],
+        [ 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+    ]);
+
+    // Upper right
+    world.tileMaps.push([
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1 ],
+        [ 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+    ]);
+
+    // Lower right
+    world.tileMaps.push([
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1 ],
+        [ 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1 ],
+        [ 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1 ],
+        [ 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
+        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+    ]);
+    
+    return world;
+}
+
+function getTileMap(world, tileMapX, tileMapY) {
+    if (tileMapX >= 0 && tileMapX < world.tileMapCountX && tileMapY >= 0 && tileMapY < world.tileMapCountY) {
+        var i = tileMapX + tileMapY * world.tileMapCountX;
+        return world.tileMaps[i];
+    } else {
+        return null;
+    }
+}
+
+function isTileMapPointEmpty(world, tileMap, playerX, playerY) {
+    var tileMapPointX = Math.trunc(playerX / world.tileSide);
+    var tileMapPointY = Math.trunc(playerY / world.tileSide);
+    if (tileMapPointX >= 0 && tileMapPointX < world.tileCountX && tileMapPointY >= 0 && tileMapPointY < world.tileCountY) {
+        return tileMap[tileMapPointY][tileMapPointX] === 0;
+    } else {
+        return false;
+    }
+}
 
 function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {
     var x, y, rowOffset, columnOffset;

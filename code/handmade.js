@@ -4,7 +4,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
         memory.gameState = {
-            playerP: new CanonicalPosition(0, 0, 8, 5, 0, 0),
+            playerP: new WorldPosition(8, 5, 0, 0),
             tJump: 0
         };
         memory.world = createWorld()
@@ -12,7 +12,6 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
 
     var state = memory.gameState;
     var world = memory.world;
-    var tileMap = getTileMap(world, state.playerP.tileMapX, state.playerP.tileMapY);
     var playerWidth = 0.75 * world.tileSideInMeters;
     var playerHeight = world.tileSideInMeters;
 
@@ -21,10 +20,10 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
             var controller = input.controllers[i];
             var dt = input.dtForFrame;
 
-            var playerSpeed = 10;
+            var playerSpeed = 5;
 
             if (controller.actionDown.endedDown) {
-                playerSpeed = 30;
+                playerSpeed = 15;
             }
 
             if (controller.actionUp.endedDown) {
@@ -68,27 +67,34 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
 
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
 
-    for (var row = 0; row < tileMap.length; row++) {
-        for (var col = 0; col < tileMap[row].length; col++) {
-            var minX = col * world.tileSideInPixels + world.offsetX;
-            var minY = row * world.tileSideInPixels + world.offsetY;
+    var centerX = backBuffer.width/2, centerY = backBuffer.height/2;
+
+    for (var row = -10; row < 10; row++) {
+        for (var col = -20; col <= 20; col++) {
+            var minX = centerX + col * world.tileSideInPixels - state.playerP.x * world.metersToPixels;
+            var minY = centerY + row * world.tileSideInPixels - state.playerP.y * world.metersToPixels;
             var maxX = minX + world.tileSideInPixels;
             var maxY = minY + world.tileSideInPixels;
-            var tileId = tileMap[row][col];
-            var gray = 0.5;
-            if (tileId == 1) {
-                gray = 1;
+            var tileId = getTileValue(world, state.playerP.tileX + col, state.playerP.tileY + row);
+            if (tileId >= 0) {
+                var gray = 0.5;
+                if (tileId === 1) {
+                    gray = 1;
+                }
+                if (row === 0 && col === 0) {
+                    gray = 0;
+                }
+                drawRectangle(backBuffer, minX, minY, maxX, maxY, gray, gray, gray);
             }
-            if (row === state.playerP.tileY && col === state.playerP.tileX) {
-                gray = 0;
-            }
-            drawRectangle(backBuffer, minX, minY, maxX, maxY, gray, gray, gray);
         }
     }
 
+
     var jump = Math.sin(state.tJump * Math.PI) * world.tileSideInMeters;
-    var playerLeft = state.playerP.tileX * world.tileSideInPixels + (state.playerP.x - 0.5 * playerWidth) * world.metersToPixels + world.offsetX;
-    var playerTop = state.playerP.tileY * world.tileSideInPixels + (state.playerP.y - jump - playerHeight) * world.metersToPixels + world.offsetY;
+    //var playerLeft = state.playerP.tileX * world.tileSideInPixels + (state.playerP.x - 0.5 * playerWidth) * world.metersToPixels + world.offsetX;
+    //var playerTop = state.playerP.tileY * world.tileSideInPixels + (state.playerP.y - jump - playerHeight) * world.metersToPixels + world.offsetY;
+    var playerLeft = centerX + (-0.5 * playerWidth) * world.metersToPixels;
+    var playerTop = centerY + (-playerHeight) * world.metersToPixels;
     var playerRight = playerLeft + playerWidth * world.metersToPixels;
     var playerBottom = playerTop + playerHeight * world.metersToPixels;
     var playerR = 1;
@@ -108,9 +114,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
 };
 
-function CanonicalPosition(tileMapX, tileMapY, tileX, tileY, x, y) {
-    this.tileMapX = tileMapX;
-    this.tileMapY = tileMapY;
+function WorldPosition(tileX, tileY, x, y) {
     this.tileX = tileX;
     this.tileY = tileY;
     this.x = x;
@@ -122,126 +126,82 @@ function createWorld() {
     world.tileSideInPixels = 60;
     world.tileSideInMeters = 1.4;
     world.metersToPixels = world.tileSideInPixels / world.tileSideInMeters;
-    world.tileMapCountX = 2;
-    world.tileMapCountY = 2;
-    world.tileCountX = 17;
-    world.tileCountY = 9;
     world.offsetX = -0.5 * world.tileSideInPixels;
     world.offsetY = 0;
-    world.tileMaps = [];
+    world.tileChunkDim = 256;
+    world.tileChunks = [];
 
     // Upper left
-    world.tileMaps.push([
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-    ]);
-
-    // Upper right
-    world.tileMaps.push([
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
-        [0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1],
-        [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
-        [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-    ]);
-
-    // Lower left
-    world.tileMaps.push([
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
-        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ]);    
-
-    // Lower right    
-    world.tileMaps.push([
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1],
-        [0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    world.tileChunks.push([
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ]);
 
     return world;
 }
 
-function getTileMap(world, tileMapX, tileMapY) {
-    if (tileMapX >= 0 && tileMapX < world.tileMapCountX && tileMapY >= 0 && tileMapY < world.tileMapCountY) {
-        var i = tileMapX + tileMapY * world.tileMapCountX;
-        return world.tileMaps[i];
-    } else {
-        return null;
-    }
+function getTileChunk(world, tileChunkX, tileChunkY) {
+    // TODO: temporary
+    return world.tileChunks[0];
 }
 
-function isTileMapPointEmpty(world, tileMap, tileX, tileY) {
-    if (tileX >= 0 && tileX < world.tileCountX && tileY >= 0 && tileY < world.tileCountY) {
-        return tileMap[tileY][tileX] === 0;
-    } else {
-        return false;
-    }
+function getTileValue(world, absTileX, absTileY) {
+    var tileChunkPosition = getTileChunkPosition(world, absTileX, absTileY);
+
+    var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
+    return getTileChunkValue(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY);
 }
 
-function isWorldPointEmpty(world, canPos) {
-    var tileMap = getTileMap(world, canPos.tileMapX, canPos.tileMapY);
-    return isTileMapPointEmpty(world, tileMap, canPos.tileX, canPos.tileY);
+function getTileChunkValue(tileChunk, tileX, tileY) {    
+    if (tileY >= 0 && tileY < tileChunk.length && tileX >= 0 && tileX < tileChunk[tileY].length) {
+        return tileChunk[tileY][tileX];
+    }
+    return -1;
 }
 
-function recanonicalizePosition(world, canPos) {
-    if (canPos.x < 0) {
-        canPos.x += world.tileSideInMeters;
-        canPos.tileX--;
-    }
-    if (canPos.y < 0) {
-        canPos.y += world.tileSideInMeters;
-        canPos.tileY--;
-    }
-    if (canPos.x >= world.tileSideInMeters) {
-        canPos.x -= world.tileSideInMeters;
-        canPos.tileX++;
-    }
-    if (canPos.y >= world.tileSideInMeters) {
-        canPos.y -= world.tileSideInMeters;
-        canPos.tileY++;
-    }
-    if (canPos.tileX < 0) {
-        canPos.tileX += world.tileCountX;
-        canPos.tileMapX--;
-    }
-    if (canPos.tileX >= world.tileCountX) {
-        canPos.tileX -= world.tileCountX;
-        canPos.tileMapX++;
-    }
-    if (canPos.tileY < 0) {
-        canPos.tileY += world.tileCountY;
-        canPos.tileMapY--;
-    }
-    if (canPos.tileY >= world.tileCountY) {
-        canPos.tileY -= world.tileCountY;
-        canPos.tileMapY++;
-    }
+function isTileChunkTileEmpty(tileChunk, tileX, tileY) {
+    return getTileChunkValue(tileChunk, tileX, tileY) === 0;
 }
 
+function getTileChunkPosition(world, absTileX, absTileY) {
+    var tileChunkPosition = {};
+    tileChunkPosition.tileChunkX = Math.floor(absTileX / world.tileChunkDim);
+    tileChunkPosition.tileChunkY = Math.floor(absTileY / world.tileChunkDim);
+    tileChunkPosition.relTileX = absTileX % world.tileChunkDim;
+    tileChunkPosition.relTileY = absTileY % world.tileChunkDim;
+    return tileChunkPosition;
+}
+
+function isWorldPointEmpty(world, pos) {
+    var tileChunkPosition = getTileChunkPosition(world, pos.tileX, pos.tileY);
+    var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
+    return isTileChunkTileEmpty(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY);
+}
+
+function recanonicalizePosition(world, pos) {
+    var offsetX = Math.floor(pos.x / world.tileSideInMeters);
+    var offsetY = Math.floor(pos.y / world.tileSideInMeters);
+    pos.tileX += offsetX;
+    pos.tileY += offsetY;
+    pos.x -= offsetX * world.tileSideInMeters;
+    pos.y -= offsetY * world.tileSideInMeters;
+}
 
 function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {
     var x, y, rowOffset, columnOffset;

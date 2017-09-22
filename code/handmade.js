@@ -3,18 +3,18 @@
 gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
-        memory.gameState = {            
-            playerX: backBuffer.width/2,
-            playerY: backBuffer.height/2+100,
-            tJump: 0,
-            tDash: 0            
+        memory.gameState = {
+            player: new RawPosition(0, 0, backBuffer.width / 2, backBuffer.height / 2 + 100),
+            tJump: 0
         };
         memory.world = createWorld()
     }
 
     var state = memory.gameState;
     var world = memory.world;
-    var tileMap = getTileMap(world, 0, 0);
+    var tileMap = getTileMap(world, state.player.tileMapX, state.player.tileMapY);
+    var playerWidth = 0.75 & world.tileSide;
+    var playerHeight = world.tileSide;
 
     for (var i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i].isConnected) {
@@ -24,41 +24,43 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
                 if (state.tJump === 0 && !controller.actionUp.startedDown) {
                     state.tJump = 100;
                 }
-            }        
+            }
 
             var dPlayerX = controller.lStickX;
             var dPlayerY = controller.lStickY;
-        
+
             dPlayerX *= 128;
             dPlayerY *= 128;
-        
-            var newPlayerX = state.playerX + dt * dPlayerX;
-            var newPlayerY = state.playerY + dt * dPlayerY;
-            
-            if (isTileMapPointEmpty(world, tileMap, newPlayerX - 0.5 * playerWidth, newPlayerY) && 
-                isTileMapPointEmpty(world, tileMap, newPlayerX + 0.5 * playerWidth, newPlayerY) && 
-                isTileMapPointEmpty(world, tileMap, newPlayerX, newPlayerY)) {
-                state.playerX = newPlayerX;
-                state.playerY = newPlayerY;
-            }            
+
+            var newPlayerX = state.player.x + dt * dPlayerX;
+            var newPlayerY = state.player.y + dt * dPlayerY;
+
+            var newPlayerLeft = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX - 0.5 * playerWidth, newPlayerY);
+            var newPlayerRight = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX + 0.5 * playerWidth, newPlayerY);
+            var newPlayerCenter = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX, newPlayerY);
+
+            if (isWorldPointEmpty(world, newPlayerLeft) &&
+                isWorldPointEmpty(world, newPlayerRight) && 
+                isWorldPointEmpty(world, newPlayerCenter)) {
+                state.player.x = newPlayerX;
+                state.player.y = newPlayerY;
+            } else {
+                console.log("collided: " + isWorldPointEmpty(world, state.player));
+            }
+            recanonicalizePosition(world, state.player);
         }
     }
-    
+
     if (state.tJump > 0) {
         state.tJump -= 3;
     } else {
         state.tJump = 0;
     }
 
-    state.playerX += state.tDash;
-    if (Math.abs(state.tDash) < 1) {
-        state.tDash = 0;
-    } else {
-        state.tDash *= 0.9;
-    }
-    
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
-    
+
+    var playerCanPos = getCanonicalPos(world, state.player);
+
     for (var row = 0; row < tileMap.length; row++) {
         for (var col = 0; col < tileMap[row].length; col++) {
             var minX = col * world.tileSide + world.offsetX;
@@ -70,101 +72,113 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
             if (tileId == 1) {
                 gray = 1;
             }
+            if (row === playerCanPos.tileY && col === playerCanPos.tileX) {
+                gray = 0;
+            }
             drawRectangle(backBuffer, minX, minY, maxX, maxY, gray, gray, gray);
         }
     }
 
     var jump = 70 * Math.sin(state.tJump / 100.0 * Math.PI);
-    var playerLeft = state.playerX - 0.5 * playerWidth + world.offsetX;
-    var playerTop = state.playerY - jump - playerHeight + world.offsetY;
+    var playerLeft = state.player.x - 0.5 * playerWidth + world.offsetX;
+    var playerTop = state.player.y - jump - playerHeight + world.offsetY;
     var playerR = 1;
     var playerG = 1;
-    var playerB = 0;    
-    drawRectangle(backBuffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);   
-    
+    var playerB = 0;
+    drawRectangle(backBuffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);
+
     if (DEBUG_MOUSE) {
-        drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX+10, input.mouseY+10, 1, 1, 0);
+        drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX + 10, input.mouseY + 10, 1, 1, 0);
         for (var i = 0; i < input.mouseButtons.length; i++) {
             if (input.mouseButtons[i].endedDown) {
                 drawRectangle(backBuffer, 10 + 25 * i, 10, 20 + 25 * i, 20, 1, 0, 0);
-            }  else {
+            } else {
                 drawRectangle(backBuffer, 10 + 25 * i, 10, 20 + 25 * i, 20, 0, 0, 1);
             }
         }
     }
 };
 
-// TODO: temporary for collision check below
-var playerWidth = 50;
-var playerHeight = 70;
+function RawPosition(tileMapX, tileMapY, x, y) {
+    this.tileMapX = tileMapX;
+    this.tileMapY = tileMapY;
+    this.x = x;
+    this.y = y;
+}
 
-gameCode.handleController = function (controller, state, dt, world, tileMap) {
-
-};
+function CanonicalPosition(tileMapX, tileMapY, tileX, tileY, x, y) {
+    this.tileMapX = tileMapX;
+    this.tileMapY = tileMapY;
+    this.tileX = tileX;
+    this.tileY = tileY;
+    this.x = x;
+    this.y = y;
+}
 
 function createWorld() {
     var world = {};
     world.tileSide = 60;
+    world.tileSideMeters = 1.4;
     world.tileMapCountX = 2;
     world.tileMapCountY = 2;
     world.tileCountX = 17;
     world.tileCountY = 9;
-    world.offsetX = -30;
+    world.offsetX = -0.5 * world.tileSide;
     world.offsetY = 0;
     world.tileMaps = [];
 
     // Upper left
     world.tileMaps.push([
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
-    ]);
-
-    // Lower left
-    world.tileMaps.push([
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0 ],
-        [ 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
     ]);
 
     // Upper right
     world.tileMaps.push([
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1 ],
-        [ 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
+        [0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1],
+        [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
+        [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
     ]);
 
-    // Lower right
+    // Lower left
     world.tileMaps.push([
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1 ],
-        [ 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1 ],
-        [ 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1 ],
-        [ 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ]);    
+
+    // Lower right    
+    world.tileMaps.push([
+        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1],
+        [0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ]);
-    
+
     return world;
 }
 
@@ -177,15 +191,63 @@ function getTileMap(world, tileMapX, tileMapY) {
     }
 }
 
-function isTileMapPointEmpty(world, tileMap, playerX, playerY) {
-    var tileMapPointX = Math.trunc(playerX / world.tileSide);
-    var tileMapPointY = Math.trunc(playerY / world.tileSide);
-    if (tileMapPointX >= 0 && tileMapPointX < world.tileCountX && tileMapPointY >= 0 && tileMapPointY < world.tileCountY) {
-        return tileMap[tileMapPointY][tileMapPointX] === 0;
+function isTileMapPointEmpty(world, tileMap, tileX, tileY) {
+    if (tileX >= 0 && tileX < world.tileCountX && tileY >= 0 && tileY < world.tileCountY) {
+        return tileMap[tileY][tileX] === 0;
     } else {
         return false;
     }
 }
+
+function isWorldPointEmpty(world, rawPos) {
+    var canPos = getCanonicalPos(world, rawPos);
+    var tileMap = getTileMap(world, canPos.tileMapX, canPos.tileMapY);
+    return isTileMapPointEmpty(world, tileMap, canPos.tileX, canPos.tileY);
+}
+
+function getCanonicalPos(world, rawPos) {
+    var canPos = new CanonicalPosition();
+    canPos.tileMapX = rawPos.tileMapX;
+    canPos.tileMapY = rawPos.tileMapY;
+    canPos.tileX = Math.trunc(rawPos.x / world.tileSide);
+    canPos.tileY = Math.trunc(rawPos.y / world.tileSide);
+    canPos.x = rawPos.x - canPos.tileX * world.tileSide - world.offsetX;
+    canPos.y = rawPos.y - canPos.tileY * world.tileSide - world.offsetY;
+    if (canPos.x < 0) {
+        canPos.x += world.tileSide;
+        canPos.tileX--;
+    }
+    if (canPos.y < 0) {
+        canPos.y += world.tileSide;
+        canPos.tileY--;
+    }
+    if (canPos.tileX < 0) {
+        canPos.tileX += world.tileCountX;
+        canPos.tileMapX--;
+    }
+    if (canPos.tileX >= world.tileCountX) {
+        canPos.tileX -= world.tileCountX;
+        canPos.tileMapX++;
+    }
+    if (canPos.tileY < 0) {
+        canPos.tileY += world.tileCountY;
+        canPos.tileMapY--;
+    }
+    if (canPos.tileY >= world.tileCountY) {
+        canPos.tileY -= world.tileCountY;
+        canPos.tileMapY++;
+    }
+    return canPos;
+}
+
+function recanonicalizePosition(world, rawPos) {
+    var canPos = getCanonicalPos(world, rawPos);
+    rawPos.tileMapX = canPos.tileMapX;
+    rawPos.tileMapY = canPos.tileMapY;
+    rawPos.x = canPos.tileX * world.tileSide + canPos.x + world.offsetX;
+    rawPos.y = canPos.tileY * world.tileSide + canPos.y + world.offsetY;
+}
+
 
 function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {
     var x, y, rowOffset, columnOffset;
@@ -207,7 +269,7 @@ function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {
             buffer.bitmap.data[columnOffset + 2] = Math.floor(b * 255);
             buffer.bitmap.data[columnOffset + 3] = 255;
         }
-    }    
+    }
 }
 
 gameCode.getSoundSamples = function (memory, output) {

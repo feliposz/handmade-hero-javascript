@@ -11,8 +11,15 @@ gameCode.autoReload = false;
 gameCode.autoReloadCountDown = 0;
 
 var utils = {};
+
 utils.clamp = function (value, min, max) {
     return value < min ? min : value > max ? max : value;
+}
+
+utils.assert = function(expr, msg) {
+    if (!expr) {
+        throw new Error(msg);
+    }
 }
 
 function displayBuffer(screen, buffer) {

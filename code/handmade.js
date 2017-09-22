@@ -4,7 +4,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
         memory.gameState = {
-            player: new RawPosition(0, 0, backBuffer.width / 2, backBuffer.height / 2 + 100),
+            playerP: new CanonicalPosition(0, 0, 8, 5, 0, 0),
             tJump: 0
         };
         memory.world = createWorld()
@@ -12,80 +12,89 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
 
     var state = memory.gameState;
     var world = memory.world;
-    var tileMap = getTileMap(world, state.player.tileMapX, state.player.tileMapY);
-    var playerWidth = 0.75 & world.tileSide;
-    var playerHeight = world.tileSide;
+    var tileMap = getTileMap(world, state.playerP.tileMapX, state.playerP.tileMapY);
+    var playerWidth = 0.75 * world.tileSideInMeters;
+    var playerHeight = world.tileSideInMeters;
 
     for (var i = 0; i < input.controllers.length; i++) {
         if (input.controllers[i].isConnected) {
             var controller = input.controllers[i];
             var dt = input.dtForFrame;
+
+            var playerSpeed = 10;
+
+            if (controller.actionDown.endedDown) {
+                playerSpeed = 30;
+            }
+
             if (controller.actionUp.endedDown) {
                 if (state.tJump === 0 && !controller.actionUp.startedDown) {
-                    state.tJump = 100;
+                    state.tJump = 1;
                 }
             }
 
             var dPlayerX = controller.lStickX;
             var dPlayerY = controller.lStickY;
 
-            dPlayerX *= 128;
-            dPlayerY *= 128;
+            dPlayerX *= playerSpeed;
+            dPlayerY *= playerSpeed;
 
-            var newPlayerX = state.player.x + dt * dPlayerX;
-            var newPlayerY = state.player.y + dt * dPlayerY;
+            var newPlayerP = utils.copyObject(state.playerP);
+            newPlayerP.x = state.playerP.x + dt * dPlayerX;
+            newPlayerP.y = state.playerP.y + dt * dPlayerY;
 
-            var newPlayerLeft = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX - 0.5 * playerWidth, newPlayerY);
-            var newPlayerRight = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX + 0.5 * playerWidth, newPlayerY);
-            var newPlayerCenter = new RawPosition(state.player.tileMapX, state.player.tileMapY, newPlayerX, newPlayerY);
+            var newPlayerLeft = utils.copyObject(newPlayerP);
+            var newPlayerRight = utils.copyObject(newPlayerP);
+            newPlayerLeft.x -= 0.5 * playerWidth;
+            newPlayerRight.x += 0.5 * playerWidth;
+            
+            recanonicalizePosition(world, newPlayerP);
+            recanonicalizePosition(world, newPlayerLeft);
+            recanonicalizePosition(world, newPlayerRight);
 
             if (isWorldPointEmpty(world, newPlayerLeft) &&
                 isWorldPointEmpty(world, newPlayerRight) && 
-                isWorldPointEmpty(world, newPlayerCenter)) {
-                state.player.x = newPlayerX;
-                state.player.y = newPlayerY;
-            } else {
-                console.log("collided: " + isWorldPointEmpty(world, state.player));
+                isWorldPointEmpty(world, newPlayerP)) {
+                state.playerP = newPlayerP;
             }
-            recanonicalizePosition(world, state.player);
         }
     }
 
     if (state.tJump > 0) {
-        state.tJump -= 3;
+        state.tJump -= 0.03;
     } else {
         state.tJump = 0;
     }
 
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
 
-    var playerCanPos = getCanonicalPos(world, state.player);
-
     for (var row = 0; row < tileMap.length; row++) {
         for (var col = 0; col < tileMap[row].length; col++) {
-            var minX = col * world.tileSide + world.offsetX;
-            var minY = row * world.tileSide + world.offsetY;
-            var maxX = minX + world.tileSide;
-            var maxY = minY + world.tileSide;
+            var minX = col * world.tileSideInPixels + world.offsetX;
+            var minY = row * world.tileSideInPixels + world.offsetY;
+            var maxX = minX + world.tileSideInPixels;
+            var maxY = minY + world.tileSideInPixels;
             var tileId = tileMap[row][col];
             var gray = 0.5;
             if (tileId == 1) {
                 gray = 1;
             }
-            if (row === playerCanPos.tileY && col === playerCanPos.tileX) {
+            if (row === state.playerP.tileY && col === state.playerP.tileX) {
                 gray = 0;
             }
             drawRectangle(backBuffer, minX, minY, maxX, maxY, gray, gray, gray);
         }
     }
 
-    var jump = 70 * Math.sin(state.tJump / 100.0 * Math.PI);
-    var playerLeft = state.player.x - 0.5 * playerWidth + world.offsetX;
-    var playerTop = state.player.y - jump - playerHeight + world.offsetY;
+    var jump = Math.sin(state.tJump * Math.PI) * world.tileSideInMeters;
+    var playerLeft = state.playerP.tileX * world.tileSideInPixels + (state.playerP.x - 0.5 * playerWidth) * world.metersToPixels + world.offsetX;
+    var playerTop = state.playerP.tileY * world.tileSideInPixels + (state.playerP.y - jump - playerHeight) * world.metersToPixels + world.offsetY;
+    var playerRight = playerLeft + playerWidth * world.metersToPixels;
+    var playerBottom = playerTop + playerHeight * world.metersToPixels;
     var playerR = 1;
     var playerG = 1;
     var playerB = 0;
-    drawRectangle(backBuffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);
+    drawRectangle(backBuffer, playerLeft, playerTop, playerRight, playerBottom, playerR, playerG, playerB);
 
     if (DEBUG_MOUSE) {
         drawRectangle(backBuffer, input.mouseX, input.mouseY, input.mouseX + 10, input.mouseY + 10, 1, 1, 0);
@@ -99,13 +108,6 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
 };
 
-function RawPosition(tileMapX, tileMapY, x, y) {
-    this.tileMapX = tileMapX;
-    this.tileMapY = tileMapY;
-    this.x = x;
-    this.y = y;
-}
-
 function CanonicalPosition(tileMapX, tileMapY, tileX, tileY, x, y) {
     this.tileMapX = tileMapX;
     this.tileMapY = tileMapY;
@@ -117,13 +119,14 @@ function CanonicalPosition(tileMapX, tileMapY, tileX, tileY, x, y) {
 
 function createWorld() {
     var world = {};
-    world.tileSide = 60;
-    world.tileSideMeters = 1.4;
+    world.tileSideInPixels = 60;
+    world.tileSideInMeters = 1.4;
+    world.metersToPixels = world.tileSideInPixels / world.tileSideInMeters;
     world.tileMapCountX = 2;
     world.tileMapCountY = 2;
     world.tileCountX = 17;
     world.tileCountY = 9;
-    world.offsetX = -0.5 * world.tileSide;
+    world.offsetX = -0.5 * world.tileSideInPixels;
     world.offsetY = 0;
     world.tileMaps = [];
 
@@ -199,27 +202,27 @@ function isTileMapPointEmpty(world, tileMap, tileX, tileY) {
     }
 }
 
-function isWorldPointEmpty(world, rawPos) {
-    var canPos = getCanonicalPos(world, rawPos);
+function isWorldPointEmpty(world, canPos) {
     var tileMap = getTileMap(world, canPos.tileMapX, canPos.tileMapY);
     return isTileMapPointEmpty(world, tileMap, canPos.tileX, canPos.tileY);
 }
 
-function getCanonicalPos(world, rawPos) {
-    var canPos = new CanonicalPosition();
-    canPos.tileMapX = rawPos.tileMapX;
-    canPos.tileMapY = rawPos.tileMapY;
-    canPos.tileX = Math.trunc(rawPos.x / world.tileSide);
-    canPos.tileY = Math.trunc(rawPos.y / world.tileSide);
-    canPos.x = rawPos.x - canPos.tileX * world.tileSide - world.offsetX;
-    canPos.y = rawPos.y - canPos.tileY * world.tileSide - world.offsetY;
+function recanonicalizePosition(world, canPos) {
     if (canPos.x < 0) {
-        canPos.x += world.tileSide;
+        canPos.x += world.tileSideInMeters;
         canPos.tileX--;
     }
     if (canPos.y < 0) {
-        canPos.y += world.tileSide;
+        canPos.y += world.tileSideInMeters;
         canPos.tileY--;
+    }
+    if (canPos.x >= world.tileSideInMeters) {
+        canPos.x -= world.tileSideInMeters;
+        canPos.tileX++;
+    }
+    if (canPos.y >= world.tileSideInMeters) {
+        canPos.y -= world.tileSideInMeters;
+        canPos.tileY++;
     }
     if (canPos.tileX < 0) {
         canPos.tileX += world.tileCountX;
@@ -237,15 +240,6 @@ function getCanonicalPos(world, rawPos) {
         canPos.tileY -= world.tileCountY;
         canPos.tileMapY++;
     }
-    return canPos;
-}
-
-function recanonicalizePosition(world, rawPos) {
-    var canPos = getCanonicalPos(world, rawPos);
-    rawPos.tileMapX = canPos.tileMapX;
-    rawPos.tileMapY = canPos.tileMapY;
-    rawPos.x = canPos.tileX * world.tileSide + canPos.x + world.offsetX;
-    rawPos.y = canPos.tileY * world.tileSide + canPos.y + world.offsetY;
 }
 
 

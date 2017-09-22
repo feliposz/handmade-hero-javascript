@@ -22,6 +22,10 @@ utils.assert = function(expr, msg) {
     }
 }
 
+utils.copyObject = function(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
 function displayBuffer(screen, buffer) {
     buffer.canvas.getContext("2d").putImageData(buffer.bitmap, 0, 0, 0, 0, buffer.width, buffer.height);
     var ctx = screen.canvas.getContext("2d");

@@ -7,7 +7,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
             playerP: new WorldPosition(8, 7, 0.7, 0.7),
             tJump: 0
         };
-        memory.world = createWorld()
+        memory.world = createWorld();
     }
 
     var state = memory.gameState;
@@ -89,10 +89,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
         }
     }
 
-
     var jump = Math.sin(state.tJump * Math.PI) * world.tileSideInMeters;
-    //var playerLeft = state.playerP.tileX * world.tileSideInPixels + (state.playerP.x - 0.5 * playerWidth) * world.metersToPixels + world.offsetX;
-    //var playerTop = state.playerP.tileY * world.tileSideInPixels + (state.playerP.y - jump - playerHeight) * world.metersToPixels + world.offsetY;
     var playerLeft = centerX + (-0.5 * playerWidth) * world.metersToPixels;
     var playerTop = centerY - jump * world.metersToPixels;
     var playerRight = playerLeft + playerWidth * world.metersToPixels;
@@ -113,13 +110,6 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
         }
     }
 };
-
-function WorldPosition(tileX, tileY, x, y) {
-    this.tileX = tileX;
-    this.tileY = tileY;
-    this.x = x;
-    this.y = y;
-}
 
 function createWorld() {
     var world = {};
@@ -154,53 +144,6 @@ function createWorld() {
     ].reverse());
 
     return world;
-}
-
-function getTileChunk(world, tileChunkX, tileChunkY) {
-    // TODO: temporary
-    return world.tileChunks[0];
-}
-
-function getTileValue(world, absTileX, absTileY) {
-    var tileChunkPosition = getTileChunkPosition(world, absTileX, absTileY);
-
-    var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
-    return getTileChunkValue(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY);
-}
-
-function getTileChunkValue(tileChunk, tileX, tileY) {    
-    if (tileY >= 0 && tileY < tileChunk.length && tileX >= 0 && tileX < tileChunk[tileY].length) {
-        return tileChunk[tileY][tileX];
-    }
-    return -1;
-}
-
-function isTileChunkTileEmpty(tileChunk, tileX, tileY) {
-    return getTileChunkValue(tileChunk, tileX, tileY) === 0;
-}
-
-function getTileChunkPosition(world, absTileX, absTileY) {
-    var tileChunkPosition = {};
-    tileChunkPosition.tileChunkX = Math.floor(absTileX / world.tileChunkDim);
-    tileChunkPosition.tileChunkY = Math.floor(absTileY / world.tileChunkDim);
-    tileChunkPosition.relTileX = absTileX % world.tileChunkDim;
-    tileChunkPosition.relTileY = absTileY % world.tileChunkDim;
-    return tileChunkPosition;
-}
-
-function isWorldPointEmpty(world, pos) {
-    var tileChunkPosition = getTileChunkPosition(world, pos.tileX, pos.tileY);
-    var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
-    return isTileChunkTileEmpty(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY);
-}
-
-function recanonicalizePosition(world, pos) {
-    var offsetX = Math.floor(pos.x / world.tileSideInMeters);
-    var offsetY = Math.floor(pos.y / world.tileSideInMeters);
-    pos.tileX += offsetX;
-    pos.tileY += offsetY;
-    pos.x -= offsetX * world.tileSideInMeters;
-    pos.y -= offsetY * world.tileSideInMeters;
 }
 
 function drawRectangle(buffer, minX, minY, maxX, maxY, r, g, b) {

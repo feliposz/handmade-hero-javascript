@@ -322,15 +322,23 @@ function platformFillSoundBuffer(audio, output) {
 }
 
 function loadGameCode(gameCode) {
-    if (gameCode.script) {
-        document.body.removeChild(gameCode.script);
-        gameCode.script = null;
+    if (!("script" in gameCode)) {
+        gameCode.script = {};
     }
-    gameCode.script = document.createElement("script");
-    gameCode.script.src = "code/handmade.js";
-    gameCode.script.type = "text/javascript";
-    gameCode.lastReload = new Date();
-    document.body.appendChild(gameCode.script);
+    loadGameModule(gameCode, "code/handmade.js");
+    loadGameModule(gameCode, "code/handmade_tile.js");
+}
+
+function loadGameModule(gameCode, url) {
+    if (gameCode.script[url]) {
+        document.body.removeChild(gameCode.script[url]);
+        gameCode.script[url] = null;
+    }
+    gameCode.script[url] = document.createElement("script");
+    gameCode.script[url].src = url;
+    gameCode.script[url].type = "text/javascript";
+    gameCode.script[url].lastReload = new Date();
+    document.body.appendChild(gameCode.script[url]);
 }
 
 function setGameLoadInterval(gameCode, timeInterval) {

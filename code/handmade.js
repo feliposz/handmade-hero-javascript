@@ -4,7 +4,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     if (!memory.isInitialized) {
         memory.isInitialized = true;
         memory.gameState = {
-            playerP: new WorldPosition(8, 5, 0, 0),
+            playerP: new WorldPosition(8, 7, 0.7, 0.7),
             tJump: 0
         };
         memory.world = createWorld()
@@ -33,7 +33,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
             }
 
             var dPlayerX = controller.lStickX;
-            var dPlayerY = controller.lStickY;
+            var dPlayerY = -controller.lStickY;
 
             dPlayerX *= playerSpeed;
             dPlayerY *= playerSpeed;
@@ -72,7 +72,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     for (var row = -10; row < 10; row++) {
         for (var col = -20; col <= 20; col++) {
             var minX = centerX + col * world.tileSideInPixels - state.playerP.x * world.metersToPixels;
-            var minY = centerY + row * world.tileSideInPixels - state.playerP.y * world.metersToPixels;
+            var minY = centerY - row * world.tileSideInPixels + state.playerP.y * world.metersToPixels;
             var maxX = minX + world.tileSideInPixels;
             var maxY = minY + world.tileSideInPixels;
             var tileId = getTileValue(world, state.playerP.tileX + col, state.playerP.tileY + row);
@@ -94,7 +94,7 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     //var playerLeft = state.playerP.tileX * world.tileSideInPixels + (state.playerP.x - 0.5 * playerWidth) * world.metersToPixels + world.offsetX;
     //var playerTop = state.playerP.tileY * world.tileSideInPixels + (state.playerP.y - jump - playerHeight) * world.metersToPixels + world.offsetY;
     var playerLeft = centerX + (-0.5 * playerWidth) * world.metersToPixels;
-    var playerTop = centerY + (-playerHeight) * world.metersToPixels;
+    var playerTop = centerY - jump * world.metersToPixels;
     var playerRight = playerLeft + playerWidth * world.metersToPixels;
     var playerBottom = playerTop + playerHeight * world.metersToPixels;
     var playerR = 1;
@@ -151,7 +151,7 @@ function createWorld() {
         [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ]);
+    ].reverse());
 
     return world;
 }

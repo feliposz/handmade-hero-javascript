@@ -6,22 +6,36 @@ function WorldPosition(tileX, tileY, x, y) {
 }
 
 function getTileChunk(world, tileChunkX, tileChunkY) {
-    // TODO: temporary
-    return world.tileChunks[0];
+    if (tileChunkX >= 0 && tileChunkX < world.tileChunkCountX && tileChunkY >= 0 && tileChunkY <= world.tileChunkCountY) {
+        return world.tileChunks[tileChunkX + tileChunkY * world.tileChunkCountX];
+    }
+    return undefined;
 }
 
 function getTileValue(world, absTileX, absTileY) {
     var tileChunkPosition = getTileChunkPosition(world, absTileX, absTileY);
-
     var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
     return getTileChunkValue(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY);
 }
 
-function getTileChunkValue(tileChunk, tileX, tileY) {    
-    if (tileY >= 0 && tileY < tileChunk.length && tileX >= 0 && tileX < tileChunk[tileY].length) {
+function setTileValue(world, absTileX, absTileY, value) {
+    var tileChunkPosition = getTileChunkPosition(world, absTileX, absTileY);
+    var tileChunk = getTileChunk(world, tileChunkPosition.tileChunkX, tileChunkPosition.tileChunkY);
+    return setTileChunkValue(tileChunk, tileChunkPosition.relTileX, tileChunkPosition.relTileY, value);
+}
+
+function getTileChunkValue(tileChunk, tileX, tileY) {
+    if (tileChunk && tileY >= 0 && tileY < tileChunk.length && tileX >= 0 && tileX < tileChunk[tileY].length) {
         return tileChunk[tileY][tileX];
     }
     return -1;
+}
+
+function setTileChunkValue(tileChunk, tileX, tileY, value) {
+    if (tileChunk === undefined) debugger;
+    if (tileY >= 0 && tileY < tileChunk.length && tileX >= 0 && tileX < tileChunk[tileY].length) {
+        tileChunk[tileY][tileX] = value;
+    }
 }
 
 function isTileChunkTileEmpty(tileChunk, tileX, tileY) {
@@ -44,8 +58,8 @@ function isWorldPointEmpty(world, pos) {
 }
 
 function recanonicalizePosition(world, pos) {
-    var offsetX = Math.floor(pos.x / world.tileSideInMeters);
-    var offsetY = Math.floor(pos.y / world.tileSideInMeters);
+    var offsetX = Math.round(pos.x / world.tileSideInMeters);
+    var offsetY = Math.round(pos.y / world.tileSideInMeters);
     pos.tileX += offsetX;
     pos.tileY += offsetY;
     pos.x -= offsetX * world.tileSideInMeters;

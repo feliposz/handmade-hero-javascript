@@ -67,14 +67,16 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
 
     drawRectangle(backBuffer, 0, 0, backBuffer.width, backBuffer.height, 1, 0, 1);
 
-    var centerX = backBuffer.width/2, centerY = backBuffer.height/2;
+    var screenCenterX = backBuffer.width/2, screenCenterY = backBuffer.height/2;
 
     for (var row = -10; row < 10; row++) {
         for (var col = -20; col <= 20; col++) {
-            var minX = centerX + col * world.tileSideInPixels - state.playerP.x * world.metersToPixels;
-            var minY = centerY - row * world.tileSideInPixels + state.playerP.y * world.metersToPixels;
-            var maxX = minX + world.tileSideInPixels;
-            var maxY = minY + world.tileSideInPixels;
+            var centerX = screenCenterX + col * world.tileSideInPixels - state.playerP.x * world.metersToPixels;
+            var centerY = screenCenterY - row * world.tileSideInPixels + state.playerP.y * world.metersToPixels;
+            var minX = centerX - 0.5*world.tileSideInPixels;
+            var minY = centerY - 0.5*world.tileSideInPixels;
+            var maxX = centerX + 0.5*world.tileSideInPixels;
+            var maxY = centerY + 0.5*world.tileSideInPixels;
             var tileId = getTileValue(world, state.playerP.tileX + col, state.playerP.tileY + row);
             if (tileId >= 0) {
                 var gray = 0.5;
@@ -90,8 +92,8 @@ gameCode.updateAndRender = function (memory, backBuffer, input) {
     }
 
     var jump = Math.sin(state.tJump * Math.PI) * world.tileSideInMeters;
-    var playerLeft = centerX + (-0.5 * playerWidth) * world.metersToPixels;
-    var playerTop = centerY - jump * world.metersToPixels;
+    var playerLeft = screenCenterX - 0.5 * playerWidth * world.metersToPixels;
+    var playerTop = screenCenterY - (playerHeight + jump) * world.metersToPixels;
     var playerRight = playerLeft + playerWidth * world.metersToPixels;
     var playerBottom = playerTop + playerHeight * world.metersToPixels;
     var playerR = 1;
@@ -118,30 +120,51 @@ function createWorld() {
     world.metersToPixels = world.tileSideInPixels / world.tileSideInMeters;
     world.offsetX = -0.5 * world.tileSideInPixels;
     world.offsetY = 0;
-    world.tileChunkDim = 256;
+    world.tileChunkDim = 16;
+    world.tileChunkCountX = 64;
+    world.tileChunkCountY = 64;
     world.tileChunks = [];
 
-    // Upper left
-    world.tileChunks.push([
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
-        [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1],
-        [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ].reverse());
+    for (var chunk = 0; chunk < world.tileChunkCountX * world.tileChunkCountY; chunk++) {
+        world.tileChunks[chunk] = [];
+        for (var row = 0; row < world.tileChunkDim; row++) {
+            world.tileChunks[chunk][row] = [];
+            for (var col = 0; col < world.tileChunkDim; col++) {
+                world.tileChunks[chunk][row][col] = 0;
+            }
+        }
+    }
+
+    var testTiles = [
+        "WWWWWWWW WWWWWWWWWWWWWWWW WWWWWWWW",
+        "W               WW               W",
+        "W W W W   W W W WW WWW           W",
+        "W W W WW WW W W WW W     W    W  W",
+        "  WWW W W W WWW    W    WWW  WWW  ",
+        "W W W W   W W W WW W     W    W  W",
+        "W W W W   W W W WW WWW           W",
+        "W                                W",
+        "WWWWWWWW WWWWWW    WWWWWW WWWWWWWW",
+        "WWWWWWWW WWWWWW    WWWWWW WWWWWWWW",
+        "W                                W",
+        "W       W       WW  W  WWW W   W W",
+        "W  W   W W  W W WW W W W   WW WW W",
+        "  WWW W   W  W     WWW WWW W W W  ",
+        "W  W   W W  W W WW W W   W W   W W",
+        "W       W       WW W W WWW W   W W",
+        "W               WW               W",
+        "WWWWWWWW WWWWWWWWWWWWWWWW WWWWWWWW",
+    ].reverse();
+
+    for (row = 0; row < testTiles.length; row++) {
+        for (col = 0; col < testTiles[row].length; col++) {
+            var tileValue = testTiles[row].charAt(col) === "W" ? 1 : 0;
+            setTileValue(world, col, row, tileValue);
+            setTileValue(world, col, row + testTiles.length, tileValue);
+            setTileValue(world, col + testTiles[row].length, row, tileValue);
+            setTileValue(world, col + testTiles[row].length, row + testTiles.length, tileValue);
+        }
+    }
 
     return world;
 }
